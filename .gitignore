@@ -1,0 +1,3 @@
+# Données brutes : non versionnées (adresse, licence et md5 dans le README)
+donnees/brutes/*
+!donnees/brutes/.gitkeep
