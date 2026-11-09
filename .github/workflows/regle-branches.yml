@@ -1,0 +1,42 @@
+# Règle des branches du projet
+#   - vers main : seule la branche dev est acceptée ;
+#   - vers dev  : seules les branches personnelles adrien et ousmane sont acceptées.
+# Ce contrôle est rendu obligatoire dans les règles « Protection de main » et
+# « Protection de dev » : une Pull Request qui ne le respecte pas ne peut pas être fusionnée.
+
+name: Règle des branches
+
+on:
+  pull_request:
+    branches: [main, dev]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  verifier-branches:
+    name: verifier-branches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifier la branche de départ de la Pull Request
+        env:
+          VERS: ${{ github.base_ref }}
+          DEPUIS: ${{ github.head_ref }}
+          DEPOT_SOURCE: ${{ github.event.pull_request.head.repo.full_name }}
+          DEPOT: ${{ github.repository }}
+        run: |
+          echo "Pull Request : $DEPUIS -> $VERS"
+          if [ "$DEPOT_SOURCE" != "$DEPOT" ]; then
+            echo "::error::La branche de départ doit appartenir à ce dépôt (reçu : $DEPOT_SOURCE)."
+            exit 1
+          fi
+          if [ "$VERS" = "main" ] && [ "$DEPUIS" != "dev" ]; then
+            echo "::error::Vers main, seule la branche dev est acceptée (reçu : $DEPUIS)."
+            exit 1
+          fi
+          if [ "$VERS" = "dev" ] && [ "$DEPUIS" != "adrien" ] && [ "$DEPUIS" != "ousmane" ]; then
+            echo "::error::Vers dev, seules les branches adrien et ousmane sont acceptées (reçu : $DEPUIS)."
+            exit 1
+          fi
+          echo "Branche de départ autorisée."
