@@ -1,3 +1,23 @@
-# Données brutes : non versionnées (adresse, licence et md5 dans le README)
+# Données : jamais versionnées (adresses + md5 dans donnees/sources_donnees_brutes.csv)
 donnees/brutes/*
 !donnees/brutes/.gitkeep
+donnees/extraites/*
+!donnees/extraites/.gitkeep
+donnees/preparees/*
+!donnees/preparees/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# Streamlit (secrets locaux)
+.streamlit/secrets.toml
+
+# Système
+.DS_Store
+Thumbs.db
+desktop.ini
