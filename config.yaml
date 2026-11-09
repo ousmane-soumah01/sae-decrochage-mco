@@ -1,0 +1,38 @@
+# =============================================================================
+# Règles du projet sae-decrochage-mco
+# -----------------------------------------------------------------------------
+# Toutes les règles sont ici, et seulement ici : le code les lit, il ne les
+# réécrit jamais. Chaque règle est justifiée dans docs/decisions.md.
+# =============================================================================
+
+projet:
+  nom: sae-decrochage-mco
+  question: "Prévoir, un an à l'avance, le décrochage d'activité MCO des établissements de santé"
+  graine: 42                      # graine aléatoire commune (reproductibilité)
+
+# -----------------------------------------------------------------------------
+# Données : DREES, SAE, bases statistiques
+# -----------------------------------------------------------------------------
+donnees:
+  source: "DREES, Statistique annuelle des établissements de santé (SAE), bases statistiques"
+  licence: "Licence Ouverte v2.0 (Etalab)"
+  fichier_sources: donnees/sources_donnees_brutes.csv   # adresses et empreintes md5 des archives
+  dossier_brutes: donnees/brutes                        # archives .7z telles que distribuées
+  dossier_extraites: donnees/extraites                  # CSV des seules tables utiles
+  dossier_preparees: donnees/preparees                  # panel et table de modélisation
+  annee_debut: 2013               # refonte de la SAE : pas de série comparable avant
+  annee_fin: 2025
+  encodage_csv: cp1252            # Windows-1252
+  encodage_csv_utf8_a_partir_de: 2025   # les CSV sont en UTF-8 à partir de 2025
+  separateur_csv: ";"
+  dossier_csv: "Bases CSV"        # l'archive 2025 contient aussi « Bases CSV ancienne casse » : même contenu
+  cle: [FI, AN]                   # un établissement géographique, une année
+  tables:                         # tables de la SAE utilisées
+    - ID                          # identité : statut, catégorie, département, région, groupe
+    - MCO                         # capacités et activité MCO
+    - MCOPED                      # zoom pédiatrie
+    - MCOGER                      # zoom gériatrie
+    - MCOAVC                      # zoom unité neuro-vasculaire
+    - URGENCES                    # existence d'urgences
+    - SSR                         # jusqu'en 2024 : existence d'activité SMR
+    - SMR                         # même table, renommée à partir de 2025
