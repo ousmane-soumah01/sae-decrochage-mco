@@ -1,0 +1,20 @@
+# Environnement du projet (versions testées, Python 3.14)
+# Installation : python -m pip install -r requirements.txt
+# Le fichier grandit avec le projet : une bibliothèque n'est ajoutée que lorsque le code en a besoin.
+
+# Données et calcul
+numpy==2.3.5
+pandas==2.3.3
+pyarrow==25.0.1          # lecture et écriture des fichiers .parquet
+py7zr==1.1.3             # ouverture des archives SAE (.7z)
+pyyaml==6.0.3            # lecture de config.yaml
+
+# Modélisation
+scikit-learn==1.7.2
+joblib==1.5.2            # calculs en parallèle
+
+# Figures
+matplotlib==3.10.7
+
+# Tests
+pytest==9.0.1
