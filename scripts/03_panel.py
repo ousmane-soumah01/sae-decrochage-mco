@@ -5,7 +5,8 @@ Lancement, depuis la racine du dépôt (après scripts/01_extraire.py) :
 
 Le panel part de la table MCO (src.variables.construire_panel) : empilement des 13 années,
 conversion des quantités en nombres, décisions 1 et 2, identité (table ID) et région
-actuelle (décision 4) ; décisions dans docs/nettoyage_donnees.md.
+actuelle (décision 4), indicateurs des autres tables (décision 5) ;
+décisions dans docs/nettoyage_donnees.md.
 Deux vérifications (le script s'arrête si l'une échoue) :
   - le panel a autant de lignes que les 13 fichiers MCO réunis ;
   - le couple (fi, an) n'apparaît jamais deux fois.
@@ -75,6 +76,10 @@ def main():
     identite = controles[controles.etape.isin(["identite", "jointures"])]
     print("\nIdentité (table ID) et région actuelle :")
     print(identite[["mesure", "valeur"]].to_string(index=False, header=False))
+    print("\nIndicateurs tirés des autres tables (décision 5), nombre de lignes du panel :")
+    print(controles[controles.etape == "indicateurs"][["mesure", "valeur"]]
+          .to_string(index=False, header=False))
+
     print("\nÉtablissements par région actuelle (2025) :")
     print(panel[panel.an == panel.an.max()].groupby("reg_actuelle").size().to_string())
 

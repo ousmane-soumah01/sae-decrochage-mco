@@ -363,7 +363,15 @@ def test_trouver_table_extraite_signale_une_table_absente(tmp_path):
 
 # --- empiler_table ----------------------------------------------------------------
 
-from src.chargement import empiler_table  # noqa: E402
+from src.chargement import empiler_table, nom_table_annee  # noqa: E402
+
+
+@pytest.mark.parametrize("table,annee,nom", [
+    ("SSR_SMR", 2024, "SSR"), ("SSR_SMR", 2025, "SMR"),
+    ("SSR", 2025, "SMR"), ("MCO", 2025, "MCO"),
+])
+def test_nom_table_annee(table, annee, nom):
+    assert nom_table_annee(table, annee) == nom
 
 
 def test_empiler_table_met_les_annees_les_unes_sous_les_autres(tmp_path):

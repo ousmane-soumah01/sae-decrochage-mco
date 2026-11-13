@@ -6,7 +6,9 @@
   3. capacités vides mises à 0 quand l'activité correspondante est nulle (décision 1) ;
   4. incohérences repérées par des indicateurs 0/1, jamais corrigées (décision 2) ;
   5. identité de l'établissement (table ID), jointe sur (fi, an) sans perdre ni dupliquer
-     de ligne, avec la région actuelle retrouvée à partir du département (décision 4).
+     de ligne, avec la région actuelle retrouvée à partir du département (décision 4) ;
+  6. indicateurs 0/1 tirés des autres tables (pédiatrie, gériatrie, unité neurovasculaire,
+     urgences, SMR) : 1 si l'établissement y a la ligne demandée, 0 sinon (décision 5).
 Décisions : docs/nettoyage_donnees.md.
 """
 
@@ -18,6 +20,7 @@ from src.nettoyage import (
     indicateurs_incoherences,
     joindre_gauche,
     valeurs_non_numeriques,
+    vers_nombre,
 )
 
 CLE = ["fi", "an"]
@@ -34,9 +37,28 @@ COLONNES_ID = ["fi", "an", "rs", "fi_ej", "stjr", "catr", "dep", "reg"]
 # Réforme territoriale : la table ID code les nouvelles régions à partir de 2016.
 ANNEE_NOUVELLES_REGIONS = 2016
 
+# Indicateurs 0/1 tirés des autres tables (décision 5) : nom -> (table, condition sur la ligne).
+# Libellés DREES (« Liste variables SAE 2024 ») : sped = service ou unité pédiatrique,
+# uger = service ou unité de médecine gériatrique, unv = unité neurovasculaire,
+# autsu = structure d'urgences autorisée sur le site, gde = type d'activité SSR (SSR_TOT : total),
+# sejhc = séjours en hospitalisation complète.
+INDICATEURS = {
+    "a_pediatrie": ("MCOPED", lambda t: t["sped"] == "1"),
+    "a_geriatrie": ("MCOGER", lambda t: t["uger"] == "1"),
+    "a_unv": ("MCOAVC", lambda t: t["unv"] == "1"),
+    "a_urgences": ("URGENCES", lambda t: t["autsu"] == "1"),
+    "a_smr": ("SSR_SMR", lambda t: (t["gde"] == "SSR_TOT") & (vers_nombre(t["sejhc"]) > 0)),
+}
+
 # Capacité -> activité correspondante, pour la décision 1.
 CAPACITES = {f"{c}_{d}": f"{a}_{d}" for d in DISCIPLINES
              for c, a in (("lit", "jou"), ("jli", "jou"), ("pla", "sejhp"))}
+
+
+def indicateur(table, condition, nom):
+    """Table (fi, an, nom = 1) des lignes qui vérifient la condition, sans doublon."""
+    lignes = table.loc[condition, CLE].drop_duplicates()
+    return lignes.assign(**{nom: 1})
 
 
 def construire_panel(config, dossier_extraites, annees):
@@ -88,6 +110,17 @@ def construire_panel(config, dossier_extraites, annees):
     noter("identite", "régions actuelles", len(set(region.values())))
     mco, sans_id = joindre_gauche(mco, identite.drop(columns="reg"), CLE, "MCO <- ID")
     noter("jointures", "lignes MCO absentes de ID", sans_id)
+
+    # 6. Indicateurs tirés des autres tables (décision 5) : absent de la table -> 0
+    for nom, (table, condition) in INDICATEURS.items():
+        source = empiler_table(config, table, annees, dossier_extraites)
+        source["an"] = source["an"].astype(int)
+        mco, _ = joindre_gauche(mco, indicateur(source, condition(source), nom), CLE, f"MCO <- {table}")
+        mco[nom] = mco[nom].fillna(0).astype(int)
+        noter("indicateurs", f"{nom} = 1", int(mco[nom].sum()))
+        if nom == "a_smr":
+            sans_sejour = source[(source["gde"] == "SSR_TOT") & ~(vers_nombre(source["sejhc"]) > 0)]
+            noter("indicateurs", "lignes SSR_TOT sans séjour en complète (non comptées)", len(sans_sejour))
 
     mco = mco.sort_values(CLE).reset_index(drop=True)
     noter("panel", "lignes", len(mco))
