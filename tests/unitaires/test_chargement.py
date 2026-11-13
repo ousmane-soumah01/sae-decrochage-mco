@@ -359,3 +359,23 @@ def test_trouver_table_extraite_trouve_la_lettre_a(tmp_path):
 def test_trouver_table_extraite_signale_une_table_absente(tmp_path):
     with pytest.raises(FileNotFoundError, match="01_extraire"):
         trouver_table_extraite(tmp_path, "MCO", 2013)
+
+
+# --- empiler_table ----------------------------------------------------------------
+
+from src.chargement import empiler_table  # noqa: E402
+
+
+def test_empiler_table_met_les_annees_les_unes_sous_les_autres(tmp_path):
+    from src.config import charger_config
+    # En-têtes en majuscules en 2016, en minuscules en 2017 ; jli_mco n'existe qu'en 2017.
+    for annee, contenu in [(2016, "FI;AN;LIT_MCO\n010000024;2016;10\n"),
+                           (2017, "fi;an;lit_mco;jli_mco\n010000024;2017;12;4000\n")]:
+        (tmp_path / str(annee)).mkdir()
+        (tmp_path / str(annee) / f"MCO_{annee}r.csv").write_bytes(contenu.encode("cp1252"))
+    t = empiler_table(charger_config(), "MCO", [2016, 2017], tmp_path)
+    assert len(t) == 2
+    assert list(t.columns) == ["fi", "an", "lit_mco", "jli_mco"]
+    assert t["an"].tolist() == ["2016", "2017"]
+    assert pd.isna(t.loc[0, "jli_mco"])          # colonne absente en 2016 -> vide
+    assert t.loc[1, "lit_mco"] == "12"            # tout reste du texte à ce stade

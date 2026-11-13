@@ -246,3 +246,19 @@ def trouver_table_extraite(dossier_extraites, table, annee):
         raise FileNotFoundError(f"Table {table} {annee} : {len(candidats)} fichier(s) trouvé(s) "
                                 f"dans {dossier} (attendu : 1). Lancer scripts/01_extraire.py ?")
     return candidats[0]
+
+
+def empiler_table(config, table, annees, dossier_extraites):
+    """Empile les années d'une même table (une ligne par établissement et par année).
+
+    Les colonnes absentes certaines années sont vides (NaN) ces années-là.
+    Chaque année est lue dans son encodage (src.config.encodage_de_l_annee).
+    """
+    from src.config import encodage_de_l_annee
+
+    morceaux = []
+    for annee in annees:
+        chemin = trouver_table_extraite(dossier_extraites, table, annee)
+        morceaux.append(lire_table(chemin, encodage_de_l_annee(config, annee),
+                                   config["donnees"]["separateur_csv"], erreurs="replace"))
+    return pd.concat(morceaux, ignore_index=True, sort=False)
