@@ -1,0 +1,104 @@
+"""Tests unitaires de src/config.py : chaque fonction est testée seule."""
+
+import copy
+
+import pytest
+import yaml
+
+from src.config import charger_config, chemin_donnees, racine_projet, verifier_config
+
+pytestmark = pytest.mark.unitaire
+
+# Une petite configuration valide, indépendante du vrai config.yaml.
+CONFIG_MINIMALE = {
+    "projet": {"nom": "essai", "graine": 42},
+    "donnees": {
+        "fichier_sources": "donnees/sources_donnees_brutes.csv",
+        "dossier_brutes": "donnees/brutes",
+        "dossier_extraites": "donnees/extraites",
+        "dossier_preparees": "donnees/preparees",
+        "annee_debut": 2013,
+        "annee_fin": 2025,
+        "encodage_csv": "cp1252",
+        "encodage_csv_utf8_a_partir_de": 2025,
+        "separateur_csv": ";",
+        "cle": ["FI", "AN"],
+        "tables": ["ID", "MCO"],
+    },
+}
+
+
+@pytest.fixture
+def config():
+    """Copie neuve de la configuration minimale pour chaque test."""
+    return copy.deepcopy(CONFIG_MINIMALE)
+
+
+# --- racine_projet ---
+
+def test_racine_projet_contient_config_et_src():
+    racine = racine_projet()
+    assert (racine / "config.yaml").exists()
+    assert (racine / "src" / "config.py").exists()
+
+
+# --- verifier_config ---
+
+def test_verifier_config_accepte_une_config_valide(config):
+    verifier_config(config)          # ne doit rien lever
+
+
+def test_verifier_config_refuse_autre_chose_qu_un_dictionnaire():
+    with pytest.raises(ValueError, match="dictionnaire"):
+        verifier_config(None)
+
+
+def test_verifier_config_signale_une_section_manquante(config):
+    del config["donnees"]
+    with pytest.raises(ValueError, match="Section manquante.*donnees"):
+        verifier_config(config)
+
+
+def test_verifier_config_signale_une_cle_manquante(config):
+    del config["donnees"]["tables"]
+    with pytest.raises(ValueError, match="donnees.tables"):
+        verifier_config(config)
+
+
+def test_verifier_config_refuse_des_annees_inversees(config):
+    config["donnees"]["annee_debut"] = 2025
+    config["donnees"]["annee_fin"] = 2013
+    with pytest.raises(ValueError, match="annee_debut"):
+        verifier_config(config)
+
+
+# --- charger_config ---
+
+def test_charger_config_lit_un_fichier_valide(tmp_path, config):
+    fichier = tmp_path / "config.yaml"
+    fichier.write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
+    assert charger_config(fichier)["donnees"]["annee_debut"] == 2013
+
+
+def test_charger_config_signale_un_fichier_absent(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        charger_config(tmp_path / "absent.yaml")
+
+
+def test_charger_config_lit_le_vrai_config_du_projet():
+    # Le config.yaml du dépôt doit toujours être valide.
+    config = charger_config()
+    assert config["donnees"]["annee_debut"] == 2013
+    assert config["donnees"]["annee_fin"] == 2025
+    assert config["donnees"]["cle"] == ["FI", "AN"]
+
+
+# --- chemin_donnees ---
+
+def test_chemin_donnees_renvoie_un_chemin_sous_la_racine(config):
+    assert chemin_donnees(config, "dossier_brutes") == racine_projet() / "donnees" / "brutes"
+
+
+def test_chemin_donnees_signale_une_cle_inconnue(config):
+    with pytest.raises(KeyError):
+        chemin_donnees(config, "dossier_inexistant")
