@@ -27,7 +27,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd  # noqa: E402
 
-from src.chargement import extraire_tables, lire_sources, tables_attendues  # noqa: E402
+from src.chargement import (  # noqa: E402
+    extraire_tables,
+    lire_sources,
+    lire_table,
+    octets_invalides,
+    tables_attendues,
+)
 from src.config import charger_config, chemin_donnees, encodage_de_l_annee, racine_projet  # noqa: E402
 from src.qualite import CANDIDATS_ENCODAGE, encodages_valides  # noqa: E402
 
@@ -62,11 +68,8 @@ def main():
 
         tables = tables_attendues(d["tables"], annee)
         fichiers = extraire_tables(archive, annee, tables, extraites, d["dossier_csv"])
-        for table, chemin in fichiers.items():
-            bilan.append({"annee": annee, "table": table, "fichier": chemin.name,
-                          "octets": chemin.stat().st_size})
 
-        # Encodage, AVANT toute lecture
+        # 1. Encodage, AVANT toute lecture
         attendu = encodage_de_l_annee(config, annee)
         for table, chemin in fichiers.items():
             verdict = verifier_encodage(chemin, attendu)
@@ -74,7 +77,22 @@ def main():
             if not verdict["conforme"]:
                 sys.exit(f"ARRÊT : {chemin.name} ne se lit pas en {attendu} (config.yaml). "
                          f"Encodages qui marchent : {verdict['encodages_valides'] or 'aucun'}.")
-        print(f"  {annee}  {len(fichiers)} tables extraites, encodage {attendu} vérifié")
+
+        # 2. Lecture et bilan
+        for table, chemin in fichiers.items():
+            invalides = octets_invalides(chemin, attendu)
+            # Un octet illisible est remplacé par « � » et compté : on ne bloque pas
+            # tout le projet pour une faute de frappe, mais on la documente.
+            donnees = lire_table(chemin, attendu, d["separateur_csv"], erreurs="replace")
+            bilan.append({"annee": annee, "table": table, "fichier": chemin.name,
+                          "encodage": attendu, "octets": chemin.stat().st_size,
+                          "lignes": len(donnees), "colonnes": donnees.shape[1],
+                          "octets_illisibles": len(invalides),
+                          "positions_illisibles": " ".join(map(str, invalides))})
+            if invalides:
+                print(f"  {annee}  ATTENTION {chemin.name} : {len(invalides)} octet(s) illisible(s) "
+                      f"en {attendu}, remplacé(s) par « � » (positions {invalides})")
+        print(f"  {annee}  {len(fichiers)} tables extraites, encodage {attendu} vérifié, tables lues")
 
     tableaux = racine_projet() / "resultats" / "01_qualite_donnees" / "tableaux"
     tableaux.mkdir(parents=True, exist_ok=True)
@@ -94,8 +112,14 @@ def main():
         print(f"  {annee} : {', '.join(communs) or 'aucun'}  ->  config.yaml : "
               f"{groupe.encodage_config.iloc[0]}{note}")
 
-    print(f"\n{len(bilan)} fichiers extraits dans {extraites}")
     print(f"Détail fichier par fichier dans {(tableaux / 'encodages.csv').relative_to(racine_projet())}")
+
+    bilan = pd.DataFrame(bilan)
+    print("\nNombre de lignes par table et par année :")
+    print(bilan.pivot(index="annee", columns="table", values="lignes").fillna(0).astype(int).to_string())
+    print(f"\n{len(bilan)} fichiers extraits et lus dans {extraites}")
+    print(f"Bilan (lignes, colonnes, octets illisibles) dans "
+          f"{(tableaux / 'extraction.csv').relative_to(racine_projet())}")
 
 
 if __name__ == "__main__":

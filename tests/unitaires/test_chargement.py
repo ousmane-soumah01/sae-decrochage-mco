@@ -6,6 +6,7 @@ Aucun test n'utilise Internet : le téléchargement est simulé (monkeypatch).
 import hashlib
 import io
 
+import pandas as pd
 import pytest
 
 from src import chargement
@@ -256,3 +257,90 @@ def test_extraire_tables_signale_une_table_absente(tmp_path):
     archive = fausse_archive(tmp_path / "sae_2025.7z", {f"{BASE}/Bases CSV/ID_2025r.csv": "FI\n1\n"})
     with pytest.raises(ValueError, match="MCO 2025 introuvable"):
         extraire_tables(archive, 2025, ["ID", "MCO"], tmp_path / "extraites")
+
+
+# =============================================================================
+# Partie 3 : lecture d'une table extraite
+# =============================================================================
+
+from src.chargement import lire_table  # noqa: E402
+
+
+# --- lire_table ---------------------------------------------------------------
+
+def test_lire_table_garde_le_zero_de_tete_et_les_accents(tmp_path):
+    f = tmp_path / "ID_2024r.csv"
+    f.write_bytes("FI;rs;An\n010000024;CH CŒUR DE L’AIN;2024\n".encode("cp1252"))
+    t = lire_table(f)
+    assert list(t.columns) == ["fi", "rs", "an"]          # mis en minuscules
+    assert t.loc[0, "fi"] == "010000024"                   # zéro de tête conservé (texte)
+    assert t.loc[0, "rs"] == "CH CŒUR DE L’AIN"            # Œ et ’ lus en Windows-1252
+
+
+def test_lire_table_seule_une_case_vide_est_manquante(tmp_path):
+    f = tmp_path / "MCO_2024r.csv"
+    f.write_bytes("FI;JOU_MCO;LIBELLE\n1;;NA\n".encode("cp1252"))
+    t = lire_table(f)
+    assert pd.isna(t.loc[0, "jou_mco"])                    # case vide -> manquante
+    assert t.loc[0, "libelle"] == "NA"                     # « NA » reste du texte
+
+
+def test_lire_table_refuse_des_colonnes_en_double(tmp_path):
+    f = tmp_path / "MCO_2024r.csv"
+    f.write_bytes("FI;fi\n1;1\n".encode("cp1252"))
+    with pytest.raises(ValueError, match="colonnes en double"):
+        lire_table(f)
+
+
+# --- octets_invalides ---------------------------------------------------------
+
+from src.chargement import octets_invalides  # noqa: E402
+
+
+def test_octets_invalides_fichier_lisible(tmp_path):
+    f = tmp_path / "a.csv"
+    f.write_bytes("PRÉSIDENT".encode("cp1252"))
+    assert octets_invalides(f, "cp1252") == []
+
+
+def test_octets_invalides_trouve_une_faute_de_frappe(tmp_path):
+    # « PR\x90ESIDENT » : 0x90 n'existe pas en Windows-1252
+    f = tmp_path / "a.csv"
+    f.write_bytes(b"DU PR\x90ESIDENT MAGNAUD")
+    assert octets_invalides(f, "cp1252") == [5]
+
+
+def test_octets_invalides_compte_chaque_octet(tmp_path):
+    f = tmp_path / "a.csv"
+    f.write_bytes(b"\x90ab\x81cd\x8f")
+    assert octets_invalides(f, "cp1252") == [0, 3, 6]
+
+
+def test_octets_invalides_detecte_un_fichier_windows_lu_en_utf8(tmp_path):
+    f = tmp_path / "a.csv"
+    f.write_bytes("é".encode("cp1252"))          # un seul octet 0xE9, invalide en UTF-8
+    assert octets_invalides(f, "utf-8") == [0]
+
+
+# --- lire_table : encodage et octets illisibles -------------------------------
+
+def test_lire_table_strict_refuse_un_octet_illisible(tmp_path):
+    f = tmp_path / "ID_2016r.csv"
+    f.write_bytes(b"FI;ADR\n1;PR\x90ESIDENT\n")
+    with pytest.raises(UnicodeDecodeError):
+        lire_table(f)
+
+
+def test_lire_table_replace_remplace_un_octet_illisible(tmp_path):
+    f = tmp_path / "ID_2016r.csv"
+    f.write_bytes(b"FI;ADR\n1;PR\x90ESIDENT\n")
+    t = lire_table(f, erreurs="replace")
+    assert t.loc[0, "adr"] == "PR\ufffdESIDENT"   # « � »
+    assert len(t) == 1
+
+
+def test_lire_table_lit_un_fichier_utf8(tmp_path):
+    f = tmp_path / "ID_2025r.csv"
+    f.write_bytes("FI;RS\n010000024;CENTRE HOSPITALIER DE BOURG-EN-BRESSE é\n".encode("utf-8"))
+    t = lire_table(f, encodage="utf-8")
+    assert t.loc[0, "rs"].endswith("é")

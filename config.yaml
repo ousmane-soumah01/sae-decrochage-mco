@@ -26,7 +26,7 @@ donnees:
   encodage_csv_utf8_a_partir_de: 2025   # les CSV sont en UTF-8 à partir de 2025
   separateur_csv: ";"
   dossier_csv: "Bases CSV"        # l'archive 2025 contient aussi « Bases CSV ancienne casse » : même contenu
-  cle: [FI, AN]                   # un établissement géographique, une année
+  cle: [fi, an]                   # un établissement géographique, une année
   tables:                         # tables de la SAE utilisées
     - ID                          # identité : statut, catégorie, département, région, groupe
     - MCO                         # capacités et activité MCO

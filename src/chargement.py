@@ -5,6 +5,9 @@ celles du projet (empreinte md5). donnees/sources_donnees_brutes.csv donne, pour
 chaque année, le nom de l'archive, son adresse et son md5.
 
 Partie 2 : extraire des archives les seules tables utiles au projet.
+
+Partie 3 : lire une table extraite, sans rien interpréter (après la vérification
+de son encodage, src.qualite.encodages_valides).
 """
 
 import csv
@@ -13,6 +16,7 @@ import re
 import urllib.request
 from pathlib import Path, PurePosixPath
 
+import pandas as pd
 import py7zr
 
 # Colonnes attendues dans donnees/sources_donnees_brutes.csv
@@ -187,3 +191,47 @@ def _supprimer_dossier(dossier):
     for chemin in sorted(Path(dossier).rglob("*"), reverse=True):
         chemin.unlink() if chemin.is_file() else chemin.rmdir()
     Path(dossier).rmdir()
+
+
+# =============================================================================
+# Partie 3 : lecture d'une table extraite
+# =============================================================================
+
+def octets_invalides(chemin, encodage):
+    """Positions des octets d'un fichier qui n'existent pas dans l'encodage donné.
+
+    Renvoie une liste de positions (vide si tout le fichier est lisible).
+    Exemple : l'octet 0x90 n'existe pas en Windows-1252.
+    """
+    contenu = Path(chemin).read_bytes()
+    positions = []
+    debut = 0
+    while True:
+        try:
+            contenu[debut:].decode(encodage)
+            return positions
+        except UnicodeDecodeError as erreur:
+            positions.append(debut + erreur.start)
+            debut = debut + erreur.end
+
+
+def lire_table(chemin, encodage="cp1252", separateur=";", erreurs="strict"):
+    """Lit un CSV de la SAE, sans rien interpréter.
+
+    - Toutes les colonnes sont lues comme du TEXTE : le FINESS « 010000024 »
+      garde son zéro de tête, et rien n'est converti en silence.
+      La conversion en nombres se fait ensuite, de façon contrôlée.
+    - Seule une case vide est considérée comme manquante (« NA » reste du texte).
+    - Les noms de colonnes sont mis en minuscules : on écrit toujours « fi »,
+      « an », « jou_mco », quelle que soit la casse du fichier d'origine.
+    - erreurs : « strict » (par défaut) s'arrête sur un octet illisible ;
+      « replace » le remplace par « � ». Dans ce cas, compter d'abord les
+      remplacements avec octets_invalides() et les documenter.
+    """
+    table = pd.read_csv(chemin, sep=separateur, encoding=encodage, dtype=str,
+                        keep_default_na=False, na_values=[""], encoding_errors=erreurs)
+    table.columns = [c.strip().lower() for c in table.columns]
+    doublons = table.columns[table.columns.duplicated()].tolist()
+    if doublons:
+        raise ValueError(f"{Path(chemin).name} : colonnes en double après mise en minuscules : {doublons}")
+    return table

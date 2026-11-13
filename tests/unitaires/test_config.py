@@ -28,7 +28,7 @@ CONFIG_MINIMALE = {
         "encodage_csv": "cp1252",
         "encodage_csv_utf8_a_partir_de": 2025,
         "separateur_csv": ";",
-        "cle": ["FI", "AN"],
+        "cle": ["fi", "an"],
         "tables": ["ID", "MCO"],
     },
 }
@@ -96,7 +96,7 @@ def test_charger_config_lit_le_vrai_config_du_projet():
     config = charger_config()
     assert config["donnees"]["annee_debut"] == 2013
     assert config["donnees"]["annee_fin"] == 2025
-    assert config["donnees"]["cle"] == ["FI", "AN"]
+    assert config["donnees"]["cle"] == ["fi", "an"]
 
 
 # --- chemin_donnees ---
