@@ -11,6 +11,9 @@ import pandas as pd
 
 from src.nettoyage import vers_nombre
 
+# Numéro FINESS : 9 caractères ; pour la Corse, le département s'écrit 2A ou 2B.
+MOTIF_FINESS = r"(\d{9}|2[AB]\d{7})"
+
 # Encodages candidats : ceux qu'un fichier français produit sous Windows, Mac ou DOS
 # peut raisonnablement utiliser.
 CANDIDATS_ENCODAGE = ["utf-8", "utf-16", "cp1252", "latin-1", "iso8859_15", "cp850", "mac_roman"]
@@ -125,3 +128,25 @@ def profil_types(table, seuil=0.99):
         lignes.append({"colonne": colonne, "non_vides": len(valeurs),
                        "part_numerique": round(part, 4), "type": nature})
     return pd.DataFrame(lignes)
+
+
+# --- Clés et cohérence entre tables ---------------------------------------------
+
+def doublons_cle(table, cle):
+    """Lignes dont la clé (par exemple ["fi"] ou ["fi", "gde"]) apparaît plusieurs fois."""
+    return table[table.duplicated(cle, keep=False)]
+
+
+def finess_invalides(serie):
+    """Masque des numéros FINESS mal formés (vides compris)."""
+    return ~serie.fillna("").str.fullmatch(MOTIF_FINESS)
+
+
+def annees_incoherentes(table, annee):
+    """Nombre de lignes dont la colonne an ne vaut pas l'année du fichier."""
+    return int((table["an"] != str(annee)).sum())
+
+
+def absents(fi_a, fi_b):
+    """FINESS présents dans fi_a mais absents de fi_b (liste triée, sans doublon)."""
+    return sorted(set(fi_a.dropna()) - set(fi_b.dropna()))

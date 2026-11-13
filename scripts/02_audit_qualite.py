@@ -9,6 +9,8 @@ Contrôles :
   2. part de valeurs manquantes                  -> manquants.csv
      (+ figure des quantités d'activité et de capacité de la table MCO)
   3. types : nombres, texte, ou les deux mêlés    -> types.csv
+  4. clés : doublons, FINESS mal formés, année ; -> cles.csv
+     cohérence : établissements absents de ID     -> coherence_tables.csv
 Sorties dans resultats/01_qualite_donnees/ (tableaux/ et figures/).
 """
 
@@ -30,12 +32,26 @@ import pandas as pd  # noqa: E402
 from src.chargement import lire_table, tables_attendues, trouver_table_extraite  # noqa: E402
 from src.config import charger_config, chemin_donnees, encodage_de_l_annee, racine_projet  # noqa: E402
 from src.nettoyage import valeurs_non_numeriques  # noqa: E402
-from src.qualite import presence_colonnes, profil_types, resume_presence, taux_manquants  # noqa: E402
+from src.qualite import (  # noqa: E402
+    absents,
+    annees_incoherentes,
+    doublons_cle,
+    finess_invalides,
+    presence_colonnes,
+    profil_types,
+    resume_presence,
+    taux_manquants,
+)
 
 # Quantités d'activité et de capacité de la table MCO (journées, séjours, séjours de 0 jour,
 # venues de partielle, lits, places, journées exploitables, par discipline, et séances).
 QUANTITES_MCO = [f"{m}_{d}" for m in ("jou", "sejhc", "sej0", "sejhp", "lit", "pla", "jli")
                  for d in ("med", "chi", "obs", "mco")] + ["sea_mco"]
+
+
+# Clé de chaque table : un établissement (fi), sauf SSR/SMR (une ligne par type de soins, gde).
+CLES = {"SSR": ["fi", "gde"], "SMR": ["fi", "gde"]}
+CLE_PAR_DEFAUT = ["fi"]
 
 
 def nom_stable(table):
@@ -71,12 +87,14 @@ def main():
     annees = range(d["annee_debut"], d["annee_fin"] + 1)
 
     colonnes = {}            # {table: {annee: [colonnes]}}
-    manquants, types, exemples = [], [], {}
+    manquants, types, exemples, cles, coherence = [], [], {}, [], []
     for annee in annees:
         encodage = encodage_de_l_annee(config, annee)
+        lues = {}
         for table in tables_attendues(d["tables"], annee):
             chemin = trouver_table_extraite(extraites, table, annee)
             lue = lire_table(chemin, encodage, d["separateur_csv"], erreurs="replace")
+            lues[table] = lue
             colonnes.setdefault(nom_stable(table), {})[annee] = list(lue.columns)
             for colonne, taux in taux_manquants(lue).items():
                 manquants.append({"table": nom_stable(table), "annee": annee,
@@ -87,6 +105,21 @@ def main():
                     cle = (nom_stable(table), ligne["colonne"])
                     exemples.setdefault(cle, set()).update(
                         valeurs_non_numeriques(lue[ligne["colonne"]]).index[:5])
+            cle_table = CLES.get(table, CLE_PAR_DEFAUT)
+            cles.append({"table": nom_stable(table), "annee": annee, "lignes": len(lue),
+                         "cle": "+".join(cle_table),
+                         "lignes_cle_en_double": len(doublons_cle(lue, cle_table)),
+                         "finess_mal_formes": int(finess_invalides(lue["fi"]).sum()),
+                         "an_different_de_l_annee": annees_incoherentes(lue, annee)})
+
+        # Cohérence : chaque table comparée à ID, la carte d'identité des établissements
+        for table, lue in lues.items():
+            if table == "ID":
+                continue
+            hors_id = absents(lue["fi"], lues["ID"]["fi"])
+            coherence.append({"annee": annee, "table": nom_stable(table),
+                              "finess": lue["fi"].nunique(), "finess_absents_de_ID": len(hors_id),
+                              "exemples": " ".join(hors_id[:5])})
 
     # 1. Présence des colonnes
     presence = pd.concat([resume_presence(presence_colonnes(par_annee)).assign(table=t)
@@ -137,6 +170,18 @@ def main():
     else:
         print("   aucune")
     print("Détail dans resultats/01_qualite_donnees/tableaux/types.csv")
+
+    # 4. Clés et cohérence
+    cles = pd.DataFrame(cles)
+    cles.to_csv(tableaux / "cles.csv", index=False, encoding="utf-8")
+    coherence = pd.DataFrame(coherence)
+    coherence.to_csv(tableaux / "coherence_tables.csv", index=False, encoding="utf-8")
+    print("\n4. Clés (total sur les 13 années, par table) :")
+    print(cles.groupby("table")[["lignes", "lignes_cle_en_double", "finess_mal_formes",
+                                  "an_different_de_l_annee"]].sum().to_string())
+    print("\n   Cohérence : FINESS absents de la table ID (total sur les années, par table) :")
+    print(coherence.groupby("table").finess_absents_de_ID.sum().to_string())
+    print("Détail dans resultats/01_qualite_donnees/tableaux/cles.csv et coherence_tables.csv")
 
 
 if __name__ == "__main__":

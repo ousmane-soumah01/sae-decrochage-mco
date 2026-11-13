@@ -5,8 +5,12 @@ import pytest
 
 from src.qualite import (
     CANDIDATS_ENCODAGE,
+    absents,
+    annees_incoherentes,
+    doublons_cle,
     encodages_valides,
     evaluer_encodage,
+    finess_invalides,
     presence_colonnes,
     profil_types,
     resume_presence,
@@ -132,3 +136,33 @@ def test_profil_types_classe_chaque_colonne():
     assert p.loc["mixte", "type"] == "mixte"
     assert p.loc["mixte", "part_numerique"] == pytest.approx(2 / 3, abs=1e-4)
     assert p.loc["vide", "type"] == "vide"
+
+
+# --- doublons_cle -----------------------------------------------------------------
+
+def test_doublons_cle_renvoie_toutes_les_lignes_concernees():
+    t = pd.DataFrame({"fi": ["1", "1", "2"], "gde": ["A", "B", "A"]})
+    assert len(doublons_cle(t, ["fi"])) == 2            # fi « 1 » en double
+    assert doublons_cle(t, ["fi", "gde"]).empty         # (fi, gde) unique
+
+
+# --- finess_invalides -------------------------------------------------------------
+
+def test_finess_invalides():
+    s = pd.Series(["010000024", "2A0000017", "2B1234567", "10000024", "01000002X", None])
+    assert finess_invalides(s).tolist() == [False, False, False, True, True, True]
+
+
+# --- annees_incoherentes ----------------------------------------------------------
+
+def test_annees_incoherentes():
+    t = pd.DataFrame({"an": ["2015", "2015", "2014"]})
+    assert annees_incoherentes(t, 2015) == 1
+
+
+# --- absents --------------------------------------------------------------------
+
+def test_absents():
+    a = pd.Series(["1", "2", "3", "3", None])
+    b = pd.Series(["2"])
+    assert absents(a, b) == ["1", "3"]
