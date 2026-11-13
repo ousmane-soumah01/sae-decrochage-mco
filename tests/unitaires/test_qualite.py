@@ -1,5 +1,6 @@
 """Tests unitaires de src/qualite.py : chaque fonction est testée seule."""
 
+import pandas as pd
 import pytest
 
 from src.qualite import (
@@ -8,6 +9,7 @@ from src.qualite import (
     evaluer_encodage,
     presence_colonnes,
     resume_presence,
+    taux_manquants,
 )
 
 pytestmark = pytest.mark.unitaire
@@ -105,3 +107,10 @@ def test_resume_presence_repere_les_colonnes_irregulieres():
     assert r.loc["fi", "presente_toutes_annees"]
     assert r.loc["lit_mco", "annees_absentes"] == "2014"
     assert (r.loc["jli_mco", "premiere"], r.loc["jli_mco", "nb_annees"]) == (2015, 1)
+
+
+# --- taux_manquants -------------------------------------------------------------
+
+def test_taux_manquants():
+    t = pd.DataFrame({"a": ["1", None, None, "4"], "b": ["1", "2", "3", "4"]})
+    assert taux_manquants(t).to_dict() == {"a": 0.5, "b": 0.0}

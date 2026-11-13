@@ -95,3 +95,10 @@ def resume_presence(presence):
                        "presente_toutes_annees": not absentes,
                        "annees_absentes": " ".join(map(str, absentes))})
     return pd.DataFrame(lignes)
+
+
+# --- Valeurs manquantes ----------------------------------------------------------
+
+def taux_manquants(table):
+    """Part de cases vides de chaque colonne (entre 0 et 1)."""
+    return table.isna().mean()
