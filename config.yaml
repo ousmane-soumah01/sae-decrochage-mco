@@ -62,3 +62,4 @@ perimetre:
 # -----------------------------------------------------------------------------
 cible:
   reference: moyenne_ponderee            # évolution nationale = somme(activité t+1) / somme(activité t) - 1
+  ecart_points: 15                       # décrochage si évolution < référence - 15 points

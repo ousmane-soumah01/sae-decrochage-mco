@@ -39,7 +39,7 @@ CONFIG_MINIMALE = {
         "poids_sejours_0_jour": 0.5,
     },
     "perimetre": {"seuil_petits_etablissements": 1000},
-    "cible": {"reference": "moyenne_ponderee"},
+    "cible": {"reference": "moyenne_ponderee", "ecart_points": 15},
 }
 
 
@@ -108,6 +108,7 @@ def test_charger_config_lit_le_vrai_config_du_projet():
     assert config["donnees"]["cle"] == ["fi", "an"]
     assert config["activite"]["poids_partielle"] == 0.5
     assert config["perimetre"]["seuil_petits_etablissements"] == 1000
+    assert config["cible"]["ecart_points"] == 15
 
 
 # --- chemin_donnees ---
@@ -148,4 +149,9 @@ def test_verifier_config_refuse_un_seuil_nul(config):
 def test_verifier_config_refuse_une_reference_inconnue(config):
     config["cible"]["reference"] = "mediane"
     with pytest.raises(ValueError, match="reference inconnue"):
+        verifier_config(config)
+
+def test_verifier_config_refuse_un_ecart_nul(config):
+    config["cible"]["ecart_points"] = 0
+    with pytest.raises(ValueError, match="ecart_points"):
         verifier_config(config)

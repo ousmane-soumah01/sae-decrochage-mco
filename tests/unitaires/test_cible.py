@@ -9,7 +9,7 @@ Passage 2023 -> 2024 (activités en journées-équivalentes, seuil 1 000) :
 import pandas as pd
 import pytest
 
-from src.cible import construire_passages, reference_ponderee
+from src.cible import construire_passages, ecarts_et_decrochages, reference_ponderee
 from src.config import charger_config
 
 pytestmark = pytest.mark.unitaire
@@ -53,3 +53,28 @@ def test_reference_ponderee_retrouve_le_calcul_a_la_main(config):
     ref = reference_ponderee(construire_passages(panel_exemple(), config))
     assert ref[2023] == pytest.approx(152_540 / 153_200 - 1)       # -0,4308 %
     assert ref[2023] == pytest.approx(-0.004308, abs=1e-6)
+
+def test_ecarts_et_decrochages_retrouvent_le_calcul_a_la_main(config):
+    p = ecarts_et_decrochages(construire_passages(panel_exemple(), config), config).set_index("fi")
+    assert p.loc["B", "evolution"] == pytest.approx(-0.248889, abs=1e-6)
+    assert p.loc["B", "ecart_points"] == pytest.approx(-24.4581, abs=1e-4)
+    assert p.loc["C", "ecart_points"] == pytest.approx(-7.9274, abs=1e-4)
+    assert p["decrochage"].to_dict() == {"A": False, "B": True, "C": False, "D": False}
+    assert pd.isna(p.loc["D", "evolution"])                          # inactif en t+1 : pas d'évolution
+
+
+def test_decrochage_seuil_strict_a_15_points(config):
+    # R domine la référence (≈ -0,03 %) : S à -14,9 % ne décroche pas, T à -15,1 % décroche.
+    panel = pd.DataFrame({
+        "fi": ["R", "R", "S", "S", "T", "T"], "an": [2023, 2024] * 3, "fi_ej": ["E"] * 6,
+        "activite": [1_000_000.0, 1_000_000.0, 1000.0, 851.0, 1000.0, 849.0],
+    })
+    p = ecarts_et_decrochages(construire_passages(panel, config), config).set_index("fi")
+    assert not p.loc["S", "decrochage"]
+    assert p.loc["T", "decrochage"]
+
+
+def test_decrochage_suit_l_ecart_de_config(config):
+    config["cible"]["ecart_points"] = 5                             # variante de robustesse
+    p = ecarts_et_decrochages(construire_passages(panel_exemple(), config), config).set_index("fi")
+    assert p.loc["C", "decrochage"]                                  # -7,9 points < -5

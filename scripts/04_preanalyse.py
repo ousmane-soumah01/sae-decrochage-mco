@@ -26,6 +26,12 @@ Question 3 : quelle référence pour l'évolution « normale » d'une année sur
   R1 médiane des évolutions ; R2 moyenne simple ; R3 évolution nationale pondérée
   (somme des activités en t+1 / somme en t - 1).
   - references_candidates.csv et figure references_candidates.png (resultats/02_preanalyse/).
+
+Question 4 : à partir de quel écart à la référence parle-t-on de décrochage ?
+Écart = 100 x (évolution de l'établissement - référence pondérée), en points, pour les
+établissements au-dessus du seuil en t et actifs en t+1. Seuils candidats : -10, -15,
+-20 points (fixes) et la borne de Tukey de l'année (Q1 - 1,5 x écart interquartile).
+  - ecarts_par_passage.csv et figure borne_tukey_et_seuils.png.
 """
 
 import sys
@@ -44,6 +50,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from src.activite import calculer_activite, est_eligible  # noqa: E402
+from src.cible import construire_passages, reference_ponderee  # noqa: E402
 from src.config import charger_config, chemin_donnees, racine_projet  # noqa: E402
 
 COMPOSANTES = ["jou_mco", "sejhc_mco", "sej0_mco", "sejhp_mco", "sea_mco"]
@@ -192,7 +199,49 @@ def main():
     fig.savefig(figures / "references_candidates.png", dpi=130)
     plt.close(fig)
 
-    print(f"\nTableaux écrits dans {tableaux.relative_to(racine_projet())}, figure dans "
+    # --- Question 4 : écart à la référence et seuil de décrochage ------------------
+    passages = construire_passages(panel, config)
+    reference = reference_ponderee(passages)
+    actifs_t1 = passages[passages["actif_t1"]].copy()
+    actifs_t1["ecart_points"] = 100 * (actifs_t1["activite_t1"] / actifs_t1["activite_t"] - 1
+                                       - actifs_t1["t"].map(reference))
+    lignes = []
+    for t, g in actifs_t1.groupby("t"):
+        q1, q3 = g["ecart_points"].quantile(0.25), g["ecart_points"].quantile(0.75)
+        tukey = q1 - 1.5 * (q3 - q1)
+        ligne = {"passage": f"{t}->{t + 1}", "etablissements": len(g),
+                 "q1_points": q1, "q3_points": q3, "ecart_interquartile_points": q3 - q1,
+                 "borne_tukey_points": tukey}
+        for seuil in (10, 15, 20):
+            ligne[f"part_sous_moins_{seuil}_pct"] = 100 * (g["ecart_points"] < -seuil).mean()
+        ligne["part_sous_tukey_pct"] = 100 * (g["ecart_points"] < tukey).mean()
+        lignes.append(ligne)
+    ecarts = pd.DataFrame(lignes).set_index("passage")
+    ecarts.round(3).to_csv(tableaux / "ecarts_par_passage.csv")
+    print("\n8. Écart à la référence (points) et part des établissements sous chaque seuil (%) :")
+    print(ecarts.round(1).to_string())
+
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    covid = [i for i, nom in enumerate(ecarts.index) if nom in ("2019->2020", "2020->2021")]
+    ax.axvspan(min(covid) - 0.5, max(covid) + 0.5, color="#f1f0ec", zorder=0)
+    ax.set_ylim(min(-26, ecarts["borne_tukey_points"].min() - 2), -8)
+    ax.text((min(covid) + max(covid)) / 2, -9, "Covid", ha="center", va="top", color="#6b6a64", fontsize=9)
+    ax.plot(range(len(ecarts)), ecarts["borne_tukey_points"], marker="o", markersize=4, linewidth=2,
+            color="#2a78d6", label="borne de Tukey de l'année (Q1 - 1,5 x EI)")
+    for seuil, style in ((10, ":"), (15, "--"), (20, "-.")):
+        ax.axhline(-seuil, color="#eb6834", linewidth=1.2, linestyle=style, label=f"seuil fixe -{seuil} points")
+    ax.set_xticks(range(len(ecarts)), ecarts.index, rotation=45)
+    ax.set_ylabel("écart à la référence (points)", color="#6b6a64")
+    ax.set_title("Borne de Tukey de chaque année et seuils fixes candidats", loc="left", fontsize=11)
+    ax.grid(axis="y", color="#e6e5e0")
+    for cote in ("top", "right"):
+        ax.spines[cote].set_visible(False)
+    ax.legend(frameon=False, fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1))
+    fig.tight_layout()
+    fig.savefig(figures / "borne_tukey_et_seuils.png", dpi=130)
+    plt.close(fig)
+
+    print(f"\nTableaux écrits dans {tableaux.relative_to(racine_projet())}, figures dans "
           f"{figures.relative_to(racine_projet())}")
 
 
