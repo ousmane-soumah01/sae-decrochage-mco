@@ -235,3 +235,14 @@ def lire_table(chemin, encodage="cp1252", separateur=";", erreurs="strict"):
     if doublons:
         raise ValueError(f"{Path(chemin).name} : colonnes en double après mise en minuscules : {doublons}")
     return table
+
+
+def trouver_table_extraite(dossier_extraites, table, annee):
+    """Chemin du CSV extrait d'une table pour une année (lettre finale « r » ou « a »)."""
+    dossier = Path(dossier_extraites) / str(annee)
+    motif = re.compile(MOTIF_FICHIER.format(table=re.escape(table), annee=annee), re.IGNORECASE)
+    candidats = [p for p in dossier.glob("*.csv") if motif.fullmatch(p.name)] if dossier.exists() else []
+    if len(candidats) != 1:
+        raise FileNotFoundError(f"Table {table} {annee} : {len(candidats)} fichier(s) trouvé(s) "
+                                f"dans {dossier} (attendu : 1). Lancer scripts/01_extraire.py ?")
+    return candidats[0]

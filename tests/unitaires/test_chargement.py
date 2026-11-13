@@ -263,7 +263,7 @@ def test_extraire_tables_signale_une_table_absente(tmp_path):
 # Partie 3 : lecture d'une table extraite
 # =============================================================================
 
-from src.chargement import lire_table  # noqa: E402
+from src.chargement import lire_table, trouver_table_extraite  # noqa: E402
 
 
 # --- lire_table ---------------------------------------------------------------
@@ -344,3 +344,18 @@ def test_lire_table_lit_un_fichier_utf8(tmp_path):
     f.write_bytes("FI;RS\n010000024;CENTRE HOSPITALIER DE BOURG-EN-BRESSE é\n".encode("utf-8"))
     t = lire_table(f, encodage="utf-8")
     assert t.loc[0, "rs"].endswith("é")
+
+
+# --- trouver_table_extraite ---------------------------------------------------
+
+def test_trouver_table_extraite_trouve_la_lettre_a(tmp_path):
+    (tmp_path / "2013").mkdir()
+    (tmp_path / "2013" / "MCOPED_2013a.csv").write_text("FI\n", encoding="cp1252")
+    (tmp_path / "2013" / "MCO_2013r.csv").write_text("FI\n", encoding="cp1252")
+    assert trouver_table_extraite(tmp_path, "MCOPED", 2013).name == "MCOPED_2013a.csv"
+    assert trouver_table_extraite(tmp_path, "MCO", 2013).name == "MCO_2013r.csv"
+
+
+def test_trouver_table_extraite_signale_une_table_absente(tmp_path):
+    with pytest.raises(FileNotFoundError, match="01_extraire"):
+        trouver_table_extraite(tmp_path, "MCO", 2013)

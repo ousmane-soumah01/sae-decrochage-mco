@@ -2,7 +2,13 @@
 
 import pytest
 
-from src.qualite import CANDIDATS_ENCODAGE, encodages_valides, evaluer_encodage
+from src.qualite import (
+    CANDIDATS_ENCODAGE,
+    encodages_valides,
+    evaluer_encodage,
+    presence_colonnes,
+    resume_presence,
+)
 
 pytestmark = pytest.mark.unitaire
 
@@ -80,3 +86,22 @@ def test_evaluer_utf16_a_un_entete_illisible():
 def test_evaluer_cp1252_sur_un_fichier_utf8_donne_du_charabia():
     e = evaluer_encodage(TEXTE.encode("utf-8"), "cp1252")
     assert e["caracteres_non_francais"] > 0               # « â€™ », « Ã‰ »...
+
+
+# --- presence_colonnes / resume_presence --------------------------------------
+
+COLONNES = {2013: ["fi", "an", "lit_mco"], 2014: ["fi", "an"], 2015: ["fi", "an", "lit_mco", "jli_mco"]}
+
+
+def test_presence_colonnes_tableau_colonne_par_annee():
+    p = presence_colonnes(COLONNES)
+    assert list(p.columns) == [2013, 2014, 2015]
+    assert p.loc["lit_mco"].tolist() == [True, False, True]
+    assert p.loc["fi"].all()
+
+
+def test_resume_presence_repere_les_colonnes_irregulieres():
+    r = resume_presence(presence_colonnes(COLONNES)).set_index("colonne")
+    assert r.loc["fi", "presente_toutes_annees"]
+    assert r.loc["lit_mco", "annees_absentes"] == "2014"
+    assert (r.loc["jli_mco", "premiere"], r.loc["jli_mco", "nb_annees"]) == (2015, 1)

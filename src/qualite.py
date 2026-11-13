@@ -1,10 +1,13 @@
 """Contrôles de qualité des fichiers de la SAE.
 
 Ces fonctions MESURENT, elles ne corrigent rien.
-Pour l'instant : la vérification de l'encodage de chaque fichier, à faire avant
-toute lecture (un fichier lu dans le mauvais encodage ne provoque aucune erreur,
-mais abîme les accents en silence).
+  - Encodage de chaque fichier, à vérifier avant toute lecture (un fichier lu dans
+    le mauvais encodage ne provoque aucune erreur, mais abîme les accents en silence).
+  - Audit des tables lues (scripts/02_audit_qualite.py) : structure, puis les autres
+    contrôles au fur et à mesure.
 """
+
+import pandas as pd
 
 # Encodages candidats : ceux qu'un fichier français produit sous Windows, Mac ou DOS
 # peut raisonnablement utiliser.
@@ -65,3 +68,30 @@ def encodages_valides(chemin, candidats=CANDIDATS_ENCODAGE, octets_illisibles_to
         return []
     minimum = min(retenus.values())
     return [encodage for encodage, illisibles in retenus.items() if illisibles == minimum]
+
+
+# --- Structure : présence des colonnes selon les années ----------------------
+
+def presence_colonnes(colonnes_par_annee):
+    """Tableau colonne x année : True si la colonne existe cette année-là.
+
+    colonnes_par_annee : {annee: liste des noms de colonnes}.
+    """
+    toutes = sorted({c for colonnes in colonnes_par_annee.values() for c in colonnes})
+    annees = sorted(colonnes_par_annee)
+    return pd.DataFrame({a: [c in set(colonnes_par_annee[a]) for c in toutes] for a in annees},
+                        index=pd.Index(toutes, name="colonne"))
+
+
+def resume_presence(presence):
+    """Pour chaque colonne : nombre d'années, première et dernière année, années absentes."""
+    annees = list(presence.columns)
+    lignes = []
+    for colonne, presente in presence.iterrows():
+        vues = [a for a in annees if presente[a]]
+        absentes = [a for a in annees if not presente[a]]
+        lignes.append({"colonne": colonne, "nb_annees": len(vues),
+                       "premiere": min(vues), "derniere": max(vues),
+                       "presente_toutes_annees": not absentes,
+                       "annees_absentes": " ".join(map(str, absentes))})
+    return pd.DataFrame(lignes)
