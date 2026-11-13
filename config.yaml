@@ -26,7 +26,7 @@ donnees:
   encodage_csv_utf8_a_partir_de: 2025   # les CSV sont en UTF-8 à partir de 2025
   separateur_csv: ";"
   dossier_csv: "Bases CSV"        # l'archive 2025 contient aussi « Bases CSV ancienne casse » : même contenu
-  cle: [FI, AN]                   # un établissement géographique, une année
+  cle: [fi, an]                   # un établissement géographique, une année
   tables:                         # tables de la SAE utilisées
     - ID                          # identité : statut, catégorie, département, région, groupe
     - MCO                         # capacités et activité MCO
@@ -36,3 +36,34 @@ donnees:
     - URGENCES                    # existence d'urgences
     - SSR                         # jusqu'en 2024 : existence d'activité SMR
     - SMR                         # même table, renommée à partir de 2025
+
+# -----------------------------------------------------------------------------
+# Mesure de l'activité MCO, en journées-équivalentes (docs/decisions.md)
+#   activite = journées de complète + poids x (venues de partielle + séjours de 0 jour)
+# -----------------------------------------------------------------------------
+activite:
+  colonne_journees_complete: jou_mco     # journées d'hospitalisation complète
+  colonne_venues_partielle: sejhp_mco    # venues de partielle : 1 venue = 1 journée
+  colonne_sejours_0_jour: sej0_mco       # séjours de complète de 0 jour (0 journée dans jou_mco)
+  poids_partielle: 0.5
+  poids_sejours_0_jour: 0.5              # comptés comme une venue de partielle
+
+# -----------------------------------------------------------------------------
+# Périmètre (docs/decisions.md)
+# -----------------------------------------------------------------------------
+perimetre:
+  activite: MCO                          # médecine, chirurgie, obstétrique (pas SMR, PSY, HAD)
+  territoire: France                     # analyse par région ensuite (zoom Occitanie)
+  seuil_petits_etablissements: 1000      # journées-équivalentes en t : en dessous, l'établissement
+                                         # n'entre pas dans l'étude (évolutions trop instables)
+
+# -----------------------------------------------------------------------------
+# Cible : décrochage à un an (docs/decisions.md)
+# -----------------------------------------------------------------------------
+cible:
+  reference: moyenne_ponderee            # évolution nationale = somme(activité t+1) / somme(activité t) - 1
+  ecart_points: 15                       # décrochage si évolution < référence - 15 points
+  sortie_est_un_decrochage: true         # absent ou sans activité en t+1 => y = 1 (sauf réapparition)
+  compensation_min: 0.5                  # restructuration probable si >= 50 % de la perte est retrouvée
+                                         # dans le groupe (ou site cité dans une fusion / scission)
+  retirer_restructurations: true         # restructurations probables retirées des lignes évaluées
