@@ -4,7 +4,8 @@ Lancement, depuis la racine du dépôt (après scripts/01_extraire.py) :
     python scripts/03_panel.py
 
 Le panel part de la table MCO (src.variables.construire_panel) : empilement des 13 années,
-conversion des quantités en nombres, décisions 1 et 2 (docs/nettoyage_donnees.md).
+conversion des quantités en nombres, décisions 1 et 2, identité (table ID) et région
+actuelle (décision 4) ; décisions dans docs/nettoyage_donnees.md.
 Deux vérifications (le script s'arrête si l'une échoue) :
   - le panel a autant de lignes que les 13 fichiers MCO réunis ;
   - le couple (fi, an) n'apparaît jamais deux fois.
@@ -70,6 +71,12 @@ def main():
 
     print("\nDécision 2 (incohérences repérées, non corrigées), nombre de lignes :")
     print(controles[controles.etape == "incoherences"][["mesure", "valeur"]].to_string(index=False, header=False))
+
+    identite = controles[controles.etape.isin(["identite", "jointures"])]
+    print("\nIdentité (table ID) et région actuelle :")
+    print(identite[["mesure", "valeur"]].to_string(index=False, header=False))
+    print("\nÉtablissements par région actuelle (2025) :")
+    print(panel[panel.an == panel.an.max()].groupby("reg_actuelle").size().to_string())
 
     print(f"\nPanel écrit dans {sortie.relative_to(racine_projet())}")
     print(f"Contrôles écrits dans {(tableaux / 'panel_controles.csv').relative_to(racine_projet())}")

@@ -6,7 +6,9 @@ import pytest
 from src.nettoyage import (
     capacite_vide_a_zero,
     convertir_quantites,
+    correspondance_region,
     indicateurs_incoherences,
+    joindre_gauche,
     valeurs_non_numeriques,
     vers_nombre,
 )
@@ -90,3 +92,33 @@ def test_indicateurs_incoherences_chaque_ligne_declenche_un_seul_indicateur():
     assert i["inc_sej0_superieur_a_sejhc"].tolist() == [0, 1, 0, 0]
     assert i["inc_jou_trop_bas"].tolist() == [0, 0, 1, 0]
     assert i["inc_lits_zero_avec_journees"].tolist() == [0, 0, 0, 1]
+
+
+# --- correspondance_region ----------------------------------------------------
+
+def test_correspondance_region():
+    t = pd.DataFrame({"dep": ["31", "34", "31", "2A"], "reg": ["76", "76", "76", "94"]})
+    assert correspondance_region(t) == {"31": "76", "34": "76", "2A": "94"}
+
+
+def test_correspondance_region_refuse_un_departement_ambigu():
+    t = pd.DataFrame({"dep": ["31", "31"], "reg": ["76", "73"]})
+    with pytest.raises(ValueError, match="plusieurs régions"):
+        correspondance_region(t)
+
+
+# --- joindre_gauche -----------------------------------------------------------
+
+def test_joindre_gauche_garde_toutes_les_lignes_et_compte_les_absents():
+    gauche = pd.DataFrame({"fi": ["1", "2", "3"], "an": [2020] * 3})
+    droite = pd.DataFrame({"fi": ["1", "2"], "an": [2020] * 2, "stjr": ["1", "2"]})
+    r, absents = joindre_gauche(gauche, droite, ["fi", "an"])
+    assert len(r) == 3 and absents == 1
+    assert r["stjr"].tolist()[:2] == ["1", "2"] and pd.isna(r.loc[2, "stjr"])
+
+
+def test_joindre_gauche_refuse_une_cle_en_double_a_droite():
+    gauche = pd.DataFrame({"fi": ["1"], "an": [2020]})
+    droite = pd.DataFrame({"fi": ["1", "1"], "an": [2020, 2020], "x": ["a", "b"]})
+    with pytest.raises(ValueError, match="pas unique"):
+        joindre_gauche(gauche, droite, ["fi", "an"])

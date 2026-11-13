@@ -68,3 +68,33 @@ def indicateurs_incoherences(table):
         "inc_jou_trop_bas": (jou < hc - hc0).astype(int),
         "inc_lits_zero_avec_journees": ((table["lit_mco"] == 0) & (jou > 0)).astype(int),
     }, index=table.index)
+
+
+def correspondance_region(table_id):
+    """Dictionnaire département -> région, construit à partir d'une table ID.
+
+    À utiliser avec les années 2016 et suivantes (nouvelles régions) : chaque
+    département doit correspondre à une seule région, sinon ValueError.
+    """
+    paires = table_id[["dep", "reg"]].dropna().drop_duplicates()
+    nb_regions = paires.groupby("dep")["reg"].nunique()
+    ambigus = nb_regions[nb_regions > 1]
+    if len(ambigus):
+        raise ValueError(f"Départements rattachés à plusieurs régions : {ambigus.index.tolist()}")
+    return dict(zip(paires["dep"], paires["reg"]))
+
+
+def joindre_gauche(gauche, droite, cle, nom="jointure"):
+    """Jointure à gauche contrôlée : on garde toutes les lignes de gauche, et seulement elles.
+
+    - Lève ValueError si la clé n'est pas unique à droite (la jointure dupliquerait des lignes).
+    - Vérifie que le nombre de lignes de gauche ne change pas.
+    Renvoie (table jointe, nombre de lignes de gauche sans correspondance à droite).
+    """
+    if droite.duplicated(cle).any():
+        raise ValueError(f"{nom} : la clé {cle} n'est pas unique dans la table de droite.")
+    resultat = gauche.merge(droite, on=cle, how="left", validate="many_to_one", indicator="_origine")
+    if len(resultat) != len(gauche):
+        raise ValueError(f"{nom} : le nombre de lignes a changé ({len(gauche)} -> {len(resultat)}).")
+    sans_correspondance = int((resultat["_origine"] == "left_only").sum())
+    return resultat.drop(columns="_origine"), sans_correspondance

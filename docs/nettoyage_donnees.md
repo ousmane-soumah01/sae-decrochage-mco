@@ -36,3 +36,18 @@ Les lignes qui enfreignent une règle de cohérence (journées trop basses, séj
 
 **Décision 3 — Ce qui n'entre dans aucun calcul reste du texte.**
 Identifiants (`fi`, `fi_ej`), codes (`dep`, `com`, `cominsee`, `reg`…), noms et adresses restent du texte : convertis en nombres, ils perdraient « 2A », « 9B » ou leurs zéros de tête. Seules les quantités qui servent aux calculs (lits, journées exploitables, journées, séjours, séjours de 0 jour, places, venues, séances) sont converties en nombres, ainsi que l'année `an`.
+
+**Décision 4 — Région actuelle retrouvée à partir du département, pour toutes les années.**
+Mesure sur la table ID : la colonne `reg` code 27 régions de 2013 à 2015 (anciennes régions), puis 18 à partir de 2016 (nouvelles régions de la réforme territoriale), 19 en 2025. De 2016 à 2025, chaque département correspond à une seule région, et tous les départements présents avant 2016 existent après. Règle : `reg_actuelle` = la région que la correspondance département → région des années 2016 à 2025 donne au département, appliquée aux 13 années ; le code s'arrête si un département a deux régions ou n'en a aucune. Ainsi un établissement garde le même code région d'une année à l'autre, et l'Occitanie (`76`) existe dès 2013. La colonne `reg` d'origine, qui change de sens en 2016, n'entre pas dans le panel. La région `05` n'apparaît qu'en 2025, pour un seul établissement (département `9E`) : elle est gardée telle quelle.
+
+---
+
+## 3. Application dans le panel (`scripts/03_panel.py`)
+
+Le panel compte une ligne par établissement et par année de la table MCO : **20 974 lignes** (la somme des 13 fichiers), aucune en double sur `(fi, an)`, 42 colonnes (`donnees/preparees/panel_mco.parquet`, non versionné). Chaque étape est comptée dans `resultats/01_qualite_donnees/tableaux/panel_controles.csv`.
+
+- **Quantités gardées** : les 29 quantités MCO (lits, journées exploitables, journées, séjours, séjours de 0 jour, places, venues, par discipline et pour le total MCO, et séances). Les colonnes de personnel et d'activité technique, absentes certaines années, ne sont pas gardées.
+- **Conversion en nombres (décision 3)** : aucune valeur non numérique sur les 29 quantités.
+- **Capacités vides (décision 1)** : 82 092 cases mises à 0, 1 369 laissées vides.
+- **Incohérences repérées (décision 2)** : `inc_lits_vides_avec_journees` 39 lignes, `inc_places_vides_avec_venues` 90, `inc_sej0_superieur_a_sejhc` 2, `inc_jou_trop_bas` 7, `inc_lits_zero_avec_journees` 116. Ce dernier indicateur (0 lit déclaré alors qu'il y a des journées) n'avait pas été mesuré par l'audit : il est mesuré ici.
+- **Identité (table ID)** : `rs`, `fi_ej`, `stjr`, `catr`, `dep` et `reg_actuelle` (décision 4), joints sur `(fi, an)` par une jointure contrôlée (clé unique dans ID, nombre de lignes inchangé). Aucune ligne MCO sans correspondance dans ID ; 102 départements, 19 régions actuelles.

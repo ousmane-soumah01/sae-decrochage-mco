@@ -4,7 +4,9 @@
   1. empilement des 13 années de la table MCO, quantités utiles seulement ;
   2. conversion des quantités en nombres (décision 3) ;
   3. capacités vides mises à 0 quand l'activité correspondante est nulle (décision 1) ;
-  4. incohérences repérées par des indicateurs 0/1, jamais corrigées (décision 2).
+  4. incohérences repérées par des indicateurs 0/1, jamais corrigées (décision 2) ;
+  5. identité de l'établissement (table ID), jointe sur (fi, an) sans perdre ni dupliquer
+     de ligne, avec la région actuelle retrouvée à partir du département (décision 4).
 Décisions : docs/nettoyage_donnees.md.
 """
 
@@ -12,7 +14,9 @@ from src.chargement import empiler_table
 from src.nettoyage import (
     capacite_vide_a_zero,
     convertir_quantites,
+    correspondance_region,
     indicateurs_incoherences,
+    joindre_gauche,
     valeurs_non_numeriques,
 )
 
@@ -23,6 +27,12 @@ DISCIPLINES = ["med", "chi", "obs", "mco"]
 # exploitables, journées, séjours, séjours de 0 jour, places, venues, par discipline, et séances.
 QUANTITES_MCO = [f"{mesure}_{d}" for mesure in ("lit", "jli", "jou", "sejhc", "sej0", "pla", "sejhp")
                  for d in DISCIPLINES] + ["sea_mco"]
+
+# Colonnes d'identité prises dans la table ID (reg sert seulement à retrouver la région actuelle).
+COLONNES_ID = ["fi", "an", "rs", "fi_ej", "stjr", "catr", "dep", "reg"]
+
+# Réforme territoriale : la table ID code les nouvelles régions à partir de 2016.
+ANNEE_NOUVELLES_REGIONS = 2016
 
 # Capacité -> activité correspondante, pour la décision 1.
 CAPACITES = {f"{c}_{d}": f"{a}_{d}" for d in DISCIPLINES
@@ -65,6 +75,19 @@ def construire_panel(config, dossier_extraites, annees):
         mco[colonne] = incoherences[colonne]
     for colonne in [c for c in mco.columns if c.startswith("inc_")]:
         noter("incoherences", colonne, int(mco[colonne].sum()))
+
+    # 5. Identité et région actuelle (décision 4)
+    identite = empiler_table(config, "ID", annees, dossier_extraites)[COLONNES_ID]
+    identite["an"] = identite["an"].astype(int)
+    region = correspondance_region(identite[identite["an"] >= ANNEE_NOUVELLES_REGIONS])
+    identite["reg_actuelle"] = identite["dep"].map(region)
+    sans_region = sorted(identite.loc[identite["reg_actuelle"].isna(), "dep"].unique())
+    if sans_region:
+        raise ValueError(f"Départements sans région actuelle : {sans_region}")
+    noter("identite", "départements", len(region))
+    noter("identite", "régions actuelles", len(set(region.values())))
+    mco, sans_id = joindre_gauche(mco, identite.drop(columns="reg"), CLE, "MCO <- ID")
+    noter("jointures", "lignes MCO absentes de ID", sans_id)
 
     mco = mco.sort_values(CLE).reset_index(drop=True)
     noter("panel", "lignes", len(mco))
