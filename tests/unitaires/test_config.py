@@ -31,6 +31,13 @@ CONFIG_MINIMALE = {
         "cle": ["fi", "an"],
         "tables": ["ID", "MCO"],
     },
+    "activite": {
+        "colonne_journees_complete": "jou_mco",
+        "colonne_venues_partielle": "sejhp_mco",
+        "colonne_sejours_0_jour": "sej0_mco",
+        "poids_partielle": 0.5,
+        "poids_sejours_0_jour": 0.5,
+    },
 }
 
 
@@ -97,6 +104,7 @@ def test_charger_config_lit_le_vrai_config_du_projet():
     assert config["donnees"]["annee_debut"] == 2013
     assert config["donnees"]["annee_fin"] == 2025
     assert config["donnees"]["cle"] == ["fi", "an"]
+    assert config["activite"]["poids_partielle"] == 0.5
 
 
 # --- chemin_donnees ---
@@ -116,3 +124,15 @@ def test_chemin_donnees_signale_une_cle_inconnue(config):
 def test_encodage_de_l_annee_applique_la_configuration(config, annee, encodage):
     # La configuration minimale déclare cp1252, puis UTF-8 à partir de 2025.
     assert encodage_de_l_annee(config, annee) == encodage
+
+@pytest.mark.parametrize("poids", [-0.1, 1.5])
+def test_verifier_config_refuse_un_poids_hors_de_0_1(config, poids):
+    config["activite"]["poids_partielle"] = poids
+    with pytest.raises(ValueError, match="entre 0 et 1"):
+        verifier_config(config)
+
+
+def test_verifier_config_signale_une_cle_d_activite_manquante(config):
+    del config["activite"]["poids_sejours_0_jour"]
+    with pytest.raises(ValueError, match="activite.poids_sejours_0_jour"):
+        verifier_config(config)

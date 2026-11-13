@@ -36,3 +36,14 @@ donnees:
     - URGENCES                    # existence d'urgences
     - SSR                         # jusqu'en 2024 : existence d'activité SMR
     - SMR                         # même table, renommée à partir de 2025
+
+# -----------------------------------------------------------------------------
+# Mesure de l'activité MCO, en journées-équivalentes (docs/decisions.md)
+#   activite = journées de complète + poids x (venues de partielle + séjours de 0 jour)
+# -----------------------------------------------------------------------------
+activite:
+  colonne_journees_complete: jou_mco     # journées d'hospitalisation complète
+  colonne_venues_partielle: sejhp_mco    # venues de partielle : 1 venue = 1 journée
+  colonne_sejours_0_jour: sej0_mco       # séjours de complète de 0 jour (0 journée dans jou_mco)
+  poids_partielle: 0.5
+  poids_sejours_0_jour: 0.5              # comptés comme une venue de partielle

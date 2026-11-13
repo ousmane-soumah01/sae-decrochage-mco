@@ -21,6 +21,8 @@ CLES_OBLIGATOIRES = {
                 "dossier_preparees", "annee_debut", "annee_fin",
                 "encodage_csv", "encodage_csv_utf8_a_partir_de",
                 "separateur_csv", "cle", "tables"],
+    "activite": ["colonne_journees_complete", "colonne_venues_partielle",
+                 "colonne_sejours_0_jour", "poids_partielle", "poids_sejours_0_jour"],
 }
 
 
@@ -54,6 +56,12 @@ def verifier_config(config):
     donnees = config["donnees"]
     if donnees["annee_debut"] >= donnees["annee_fin"]:
         raise ValueError("donnees.annee_debut doit être strictement avant donnees.annee_fin.")
+
+    # 3. Poids de l'activité : entre 0 et 1
+    for cle in ("poids_partielle", "poids_sejours_0_jour"):
+        poids = config["activite"][cle]
+        if not 0 <= poids <= 1:
+            raise ValueError(f"activite.{cle} doit être entre 0 et 1 (valeur lue : {poids}).")
 
 
 def charger_config(chemin=None):

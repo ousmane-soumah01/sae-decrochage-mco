@@ -22,3 +22,13 @@ Toutes les colonnes sont lues comme du texte (le FINESS « 010000024 » garde so
 
 **Noms de colonnes en minuscules**
 Les noms de colonnes sont mis en minuscules à la lecture (`fi`, `an`, `jou_mco`…), quelle que soit leur casse dans le fichier d'origine : tout le code du projet écrit les colonnes de la même façon. La clé de `config.yaml` s'écrit donc `[fi, an]`.
+
+## Mesure de l'activité
+
+**Activité = `jou_mco` + 0,5 × (`sejhp_mco` + `sej0_mco`), en journées-équivalentes** *(validée le 13/11/2026)*
+Pré-analyse (`scripts/04_preanalyse.py`, `resultats/02_preanalyse/tableaux/composantes_nationales.csv`, `sejours_0_jour.csv`, `mesures_comparees.csv`), trois mesures comparées sur le panel 2013-2025 :
+- *Séjours* (`sejhc_mco + sejhp_mco`) : un séjour d'un jour compte autant qu'un séjour d'un mois, alors qu'un séjour de complète d'au moins une nuit compte en moyenne 5,6 à 5,8 journées. Elle suit le virage ambulatoire (la partielle passe de 33,3 % des séjours en 2013 à 48,8 % en 2025) plus que le volume de travail ; c'est la mesure la plus éloignée des autres (corrélation de rang 0,901 avec la mesure retenue).
+- *Journées de complète seules* (`jou_mco`) : aveugle à la partielle (682 lignes ont 0 journée mais de la partielle) et aux séjours de 0 jour (les 12 lignes dont tous les séjours de complète font 0 jour ont 0 journée), qui représentent 9,4 à 13,5 % des séjours de complète selon l'année.
+- *Journées-équivalentes* : les journées de complète, plus une fraction p d'une journée par venue de partielle et par séjour de 0 jour. Une venue dure une journée, mais rester la nuit n'équivaut pas à venir et repartir : p = 0,5. Pour la ligne médiane, passer de p = 1/3 à p = 1 ne change l'activité que de 6,5 % ; pour 1 077 lignes (établissements surtout ambulatoires), elle double ou plus : p = 1/3 et p = 1 sont gardés pour l'analyse de robustesse.
+
+Les séances (`sea_mco` : dialyse, chimiothérapie, radiothérapie ; environ 10 millions par an, sur 15 527 lignes) sont des actes courts et répétés, d'une autre nature : elles restent hors de l'activité, comme variable explicative.
