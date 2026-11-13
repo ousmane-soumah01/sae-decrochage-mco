@@ -1,14 +1,19 @@
 """Récupération des données de la SAE.
 
-Récupérer les archives de la DREES et vérifier qu'elles sont exactement celles
-du projet (empreinte md5). donnees/sources_donnees_brutes.csv donne, pour chaque
-année, le nom de l'archive, son adresse et son md5.
+Partie 1 : récupérer les archives de la DREES et vérifier qu'elles sont exactement
+celles du projet (empreinte md5). donnees/sources_donnees_brutes.csv donne, pour
+chaque année, le nom de l'archive, son adresse et son md5.
+
+Partie 2 : extraire des archives les seules tables utiles au projet.
 """
 
 import csv
 import hashlib
+import re
 import urllib.request
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+import py7zr
 
 # Colonnes attendues dans donnees/sources_donnees_brutes.csv
 COLONNES_SOURCES = ["annee", "fichier", "octets", "md5", "derniere_modif_serveur", "url"]
@@ -108,3 +113,77 @@ def recuperer_archive(source, dossier):
         raise Md5Incorrect(f"{source['fichier']} : md5 obtenu {obtenu}, attendu {source['md5']}. "
                            f"Téléchargement abîmé ou nouvelle version publiée par la DREES.")
     return "telechargee"
+
+
+# =============================================================================
+# Partie 2 : extraction des tables
+# =============================================================================
+
+# La table SSR (soins de suite et de réadaptation) devient SMR à partir de 2025.
+ANNEE_SSR_DEVIENT_SMR = 2025
+
+# Dans les archives, chaque table existe sous la forme <TABLE>_<ANNEE><lettre>.csv,
+# où la lettre vaut « r » ou « a » selon les tables et les années.
+MOTIF_FICHIER = r"{table}_{annee}[a-z]?\.csv"
+
+
+def tables_attendues(tables, annee):
+    """Tables à chercher pour une année : SSR jusqu'en 2024, SMR à partir de 2025.
+
+    tables : liste de config.yaml (donnees.tables), qui contient SSR et SMR.
+    """
+    if annee < ANNEE_SSR_DEVIENT_SMR:
+        return [t for t in tables if t != "SMR"]
+    return [t for t in tables if t != "SSR"]
+
+
+def trouver_csv(noms, table, annee, dossier="Bases CSV"):
+    """Chemin, dans une archive, du CSV d'une table pour une année.
+
+    noms : liste des chemins contenus dans l'archive.
+    Seuls les fichiers rangés directement dans le dossier `dossier` sont retenus
+    (en 2025, le dossier « Bases CSV ancienne casse » est donc écarté).
+    Lève ValueError si la table est absente, ou présente plusieurs fois.
+    """
+    motif = re.compile(MOTIF_FICHIER.format(table=re.escape(table), annee=annee), re.IGNORECASE)
+    candidats = [n for n in noms
+                 if motif.fullmatch(PurePosixPath(n).name)
+                 and PurePosixPath(n).parent.name == dossier]
+    if not candidats:
+        raise ValueError(f"Table {table} {annee} introuvable dans le dossier « {dossier} » de l'archive.")
+    if len(candidats) > 1:
+        raise ValueError(f"Table {table} {annee} présente plusieurs fois : {candidats}")
+    return candidats[0]
+
+
+def extraire_tables(archive, annee, tables, destination, dossier="Bases CSV"):
+    """Extrait d'une archive les CSV des tables demandées.
+
+    Les fichiers sont écrits dans destination/<annee>/, sous leur nom d'origine
+    (par exemple MCOPED_2013a.csv). Renvoie un dictionnaire {table: chemin}.
+    """
+    destination = Path(destination) / str(annee)
+    destination.mkdir(parents=True, exist_ok=True)
+    with py7zr.SevenZipFile(archive) as z:
+        noms = z.getnames()
+    choisis = {table: trouver_csv(noms, table, annee, dossier) for table in tables}
+
+    # py7zr extrait en recréant l'arborescence de l'archive : on extrait dans un
+    # dossier provisoire, puis on déplace chaque fichier à plat dans destination.
+    provisoire = destination / "_extraction"
+    with py7zr.SevenZipFile(archive) as z:
+        z.extract(path=provisoire, targets=list(choisis.values()))
+    resultat = {}
+    for table, nom in choisis.items():
+        final = destination / PurePosixPath(nom).name
+        (provisoire / nom).replace(final)
+        resultat[table] = final
+    _supprimer_dossier(provisoire)
+    return resultat
+
+
+def _supprimer_dossier(dossier):
+    """Supprime un dossier (devenu vide de fichiers) et ses sous-dossiers."""
+    for chemin in sorted(Path(dossier).rglob("*"), reverse=True):
+        chemin.unlink() if chemin.is_file() else chemin.rmdir()
+    Path(dossier).rmdir()

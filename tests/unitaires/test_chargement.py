@@ -170,3 +170,89 @@ def test_recuperer_archive_refuse_un_md5_incorrect_et_supprime_le_fichier(tmp_pa
     with pytest.raises(Md5Incorrect, match="attendu"):
         recuperer_archive(une_source(), tmp_path)
     assert not (tmp_path / "sae_2013.7z").exists()
+
+
+# =============================================================================
+# Partie 2 : extraction des tables
+# =============================================================================
+
+import py7zr  # noqa: E402
+
+from src.chargement import extraire_tables, tables_attendues, trouver_csv  # noqa: E402
+
+BASE = "SAE 2025 Bases statistiques - formats SAS-CSV/Bases statistiques"
+TABLES_CONFIG = ["ID", "MCO", "MCOPED", "SSR", "SMR"]
+
+
+def fausse_archive(chemin, fichiers):
+    """Crée une archive .7z ; fichiers = {chemin_dans_archive: contenu (texte)}."""
+    with py7zr.SevenZipFile(chemin, "w") as z:
+        for nom, contenu in fichiers.items():
+            z.writestr(contenu.encode("cp1252"), nom)
+    return chemin
+
+
+# --- tables_attendues ---------------------------------------------------------
+
+def test_tables_attendues_avant_2025_prend_ssr():
+    assert tables_attendues(TABLES_CONFIG, 2024) == ["ID", "MCO", "MCOPED", "SSR"]
+
+
+def test_tables_attendues_a_partir_de_2025_prend_smr():
+    assert tables_attendues(TABLES_CONFIG, 2025) == ["ID", "MCO", "MCOPED", "SMR"]
+
+
+# --- trouver_csv --------------------------------------------------------------
+
+NOMS = [
+    f"{BASE}/Bases CSV/MCO_2025r.csv",
+    f"{BASE}/Bases CSV ancienne casse/MCO_2025r.csv",
+    f"{BASE}/Bases CSV/MCOPED_2025a.csv",
+    f"{BASE}/Bases CSV/MCOSURV_2025r.csv",
+]
+
+
+def test_trouver_csv_ignore_le_dossier_ancienne_casse():
+    assert trouver_csv(NOMS, "MCO", 2025) == f"{BASE}/Bases CSV/MCO_2025r.csv"
+
+
+def test_trouver_csv_accepte_la_lettre_a():
+    assert trouver_csv(NOMS, "MCOPED", 2025).endswith("MCOPED_2025a.csv")
+
+
+def test_trouver_csv_ne_confond_pas_mco_et_mcosurv():
+    # « MCO » ne doit pas attraper « MCOSURV » : le motif exige « MCO_2025 ».
+    assert trouver_csv(NOMS, "MCO", 2025).endswith("/MCO_2025r.csv")
+
+
+def test_trouver_csv_signale_une_table_absente():
+    with pytest.raises(ValueError, match="introuvable"):
+        trouver_csv(NOMS, "ID", 2025)
+
+
+def test_trouver_csv_signale_une_table_en_double():
+    noms = NOMS + [f"{BASE}/Bases CSV/MCO_2025a.csv"]
+    with pytest.raises(ValueError, match="plusieurs fois"):
+        trouver_csv(noms, "MCO", 2025)
+
+
+# --- extraire_tables ----------------------------------------------------------
+
+def test_extraire_tables_extrait_a_plat_les_seules_tables_demandees(tmp_path):
+    archive = fausse_archive(tmp_path / "sae_2025.7z", {
+        f"{BASE}/Bases CSV/ID_2025r.csv": "FI;AN\n010000024;2025\n",
+        f"{BASE}/Bases CSV/MCO_2025r.csv": "FI;AN;JOU_MCO\n010000024;2025;100\n",
+        f"{BASE}/Bases CSV ancienne casse/MCO_2025r.csv": "fi;an;jou_mco\n010000024;2025;100\n",
+        f"{BASE}/Bases CSV/URGENCES_2025r.csv": "FI;AN\n010000024;2025\n",
+    })
+    fichiers = extraire_tables(archive, 2025, ["ID", "MCO"], tmp_path / "extraites")
+    dossier = tmp_path / "extraites" / "2025"
+    assert set(fichiers) == {"ID", "MCO"}
+    assert sorted(p.name for p in dossier.iterdir()) == ["ID_2025r.csv", "MCO_2025r.csv"]
+    assert fichiers["MCO"].read_text(encoding="cp1252").startswith("FI;AN;JOU_MCO")   # pas l'ancienne casse
+
+
+def test_extraire_tables_signale_une_table_absente(tmp_path):
+    archive = fausse_archive(tmp_path / "sae_2025.7z", {f"{BASE}/Bases CSV/ID_2025r.csv": "FI\n1\n"})
+    with pytest.raises(ValueError, match="MCO 2025 introuvable"):
+        extraire_tables(archive, 2025, ["ID", "MCO"], tmp_path / "extraites")
