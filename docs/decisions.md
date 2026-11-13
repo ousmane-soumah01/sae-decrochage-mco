@@ -55,3 +55,9 @@ Pour un très petit établissement, quelques journées de plus ou de moins font 
 | 3 650 et plus | 8,5 points | 1 % |
 
 Entre 365 et 1 000 journées-équivalentes, les établissements sont aussi instables qu'entre 100 et 365 : un seuil à 365 garderait des « décrochages » de bruit. À 1 000, l'instabilité chute nettement, pour 0,06 % de l'activité nationale. Le seuil de 365 est gardé pour l'analyse de robustesse. Les lignes d'activité nulle (1 113) ou inconnue (20) sont écartées quel que soit le seuil.
+
+## Cible
+
+**Référence : l'évolution nationale pondérée par l'activité** *(validée le 13/11/2026)*
+Référence d'un passage t → t+1 = somme des activités en t+1 ÷ somme des activités en t − 1, sur les établissements au-dessus du seuil en t et actifs en t+1. C'est l'évolution de l'activité MCO de toute la France : chaque établissement compte selon son activité. Une référence qui change chaque année est indispensable : en 2019→20, l'activité baisse d'environ 10 % partout (Covid), et un établissement qui suit ce mouvement n'a pas décroché.
+Pré-analyse (`references_candidates.csv`, figure `references_candidates.png`), sur 1 406 à 1 523 établissements par passage : la médiane, la moyenne simple et l'évolution pondérée racontent la même histoire (légère baisse jusqu'en 2019, environ −10 % en 2019→20, rebond de +2,3 à +2,8 % en 2020→21, petite hausse ensuite) et restent à moins de 1,4 point l'une de l'autre. La moyenne simple est tirée par quelques évolutions extrêmes (jusqu'à +1 590 % en 2019→20) : +1,99 % en 2022→23 contre +1,23 % pour la médiane et +0,60 % pour la pondérée. La pondérée a un sens national clair et ne réagit pas aux pourcentages extrêmes des petits établissements. La médiane est gardée pour l'analyse de robustesse.

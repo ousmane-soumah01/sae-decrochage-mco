@@ -39,6 +39,7 @@ CONFIG_MINIMALE = {
         "poids_sejours_0_jour": 0.5,
     },
     "perimetre": {"seuil_petits_etablissements": 1000},
+    "cible": {"reference": "moyenne_ponderee"},
 }
 
 
@@ -142,4 +143,9 @@ def test_verifier_config_signale_une_cle_d_activite_manquante(config):
 def test_verifier_config_refuse_un_seuil_nul(config):
     config["perimetre"]["seuil_petits_etablissements"] = 0
     with pytest.raises(ValueError, match="strictement positif"):
+        verifier_config(config)
+
+def test_verifier_config_refuse_une_reference_inconnue(config):
+    config["cible"]["reference"] = "mediane"
+    with pytest.raises(ValueError, match="reference inconnue"):
         verifier_config(config)

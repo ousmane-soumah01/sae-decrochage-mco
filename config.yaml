@@ -56,3 +56,9 @@ perimetre:
   territoire: France                     # analyse par région ensuite (zoom Occitanie)
   seuil_petits_etablissements: 1000      # journées-équivalentes en t : en dessous, l'établissement
                                          # n'entre pas dans l'étude (évolutions trop instables)
+
+# -----------------------------------------------------------------------------
+# Cible : décrochage à un an (docs/decisions.md)
+# -----------------------------------------------------------------------------
+cible:
+  reference: moyenne_ponderee            # évolution nationale = somme(activité t+1) / somme(activité t) - 1

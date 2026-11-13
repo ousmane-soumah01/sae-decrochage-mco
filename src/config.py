@@ -24,7 +24,11 @@ CLES_OBLIGATOIRES = {
     "activite": ["colonne_journees_complete", "colonne_venues_partielle",
                  "colonne_sejours_0_jour", "poids_partielle", "poids_sejours_0_jour"],
     "perimetre": ["seuil_petits_etablissements"],
+    "cible": ["reference"],
 }
+
+# Références d'évolution que le code sait calculer.
+REFERENCES_CONNUES = {"moyenne_ponderee"}
 
 
 def racine_projet():
@@ -67,6 +71,11 @@ def verifier_config(config):
     # 4. Seuil des petits établissements : strictement positif
     if config["perimetre"]["seuil_petits_etablissements"] <= 0:
         raise ValueError("perimetre.seuil_petits_etablissements doit être strictement positif.")
+
+    # 5. Référence connue
+    if config["cible"]["reference"] not in REFERENCES_CONNUES:
+        raise ValueError(f"cible.reference inconnue : « {config['cible']['reference']} » "
+                         f"(possible : {sorted(REFERENCES_CONNUES)}).")
 
 
 def charger_config(chemin=None):

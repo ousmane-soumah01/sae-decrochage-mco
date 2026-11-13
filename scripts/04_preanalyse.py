@@ -20,6 +20,12 @@ candidats comparés (rien n'est fixé dans config.yaml à ce stade) : 0, 365, 1 
     nationale qu'ils représentent, par seuil et par année ;
   - instabilite_par_taille.csv : dispersion des évolutions d'une année sur l'autre,
     par tranche d'activité.
+
+Question 3 : quelle référence pour l'évolution « normale » d'une année sur l'autre ?
+Établissements au-dessus du seuil en t, présents et actifs en t et t+1. Candidates :
+  R1 médiane des évolutions ; R2 moyenne simple ; R3 évolution nationale pondérée
+  (somme des activités en t+1 / somme en t - 1).
+  - references_candidates.csv et figure references_candidates.png (resultats/02_preanalyse/).
 """
 
 import sys
@@ -31,9 +37,13 @@ sys.stdout.reconfigure(encoding="utf-8")
 # La racine du dépôt passe en premier dans le chemin de Python (imports « from src... »).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import matplotlib  # noqa: E402
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from src.activite import calculer_activite  # noqa: E402
+from src.activite import calculer_activite, est_eligible  # noqa: E402
 from src.config import charger_config, chemin_donnees, racine_projet  # noqa: E402
 
 COMPOSANTES = ["jou_mco", "sejhc_mco", "sej0_mco", "sejhp_mco", "sea_mco"]
@@ -147,7 +157,43 @@ def main():
     print("\n6. Instabilité des évolutions d'une année sur l'autre, par tranche d'activité en t :")
     print(instab.round(1).to_string())
 
-    print(f"\nTableaux écrits dans {tableaux.relative_to(racine_projet())}")
+    # --- Question 3 : référence nationale -----------------------------------------
+    e = e[est_eligible(e["activite_t"], config)]
+    refs = e.groupby("an").apply(lambda g: pd.Series({
+        "etablissements": len(g),
+        "R1_mediane_pct": 100 * g["evolution"].median(),
+        "R2_moyenne_simple_pct": 100 * g["evolution"].mean(),
+        "R3_ponderee_pct": 100 * (g["activite_t1"].sum() / g["activite_t"].sum() - 1),
+        "part_hausses_plus_de_100pct": 100 * (g["evolution"] > 1).mean(),
+        "evolution_max_pct": 100 * g["evolution"].max(),
+    }), include_groups=False)
+    refs.index = [f"{t}->{t + 1}" for t in refs.index]
+    refs.index.name = "passage"
+    refs.round(3).to_csv(tableaux / "references_candidates.csv")
+    print("\n7. Références candidates par passage (établissements au-dessus du seuil, présents et actifs) :")
+    print(refs.round(2).to_string())
+
+    figures = racine_projet() / "resultats" / "02_preanalyse" / "figures"
+    figures.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    for colonne, couleur, nom in (("R1_mediane_pct", "#2a78d6", "R1 médiane"),
+                                  ("R2_moyenne_simple_pct", "#eb6834", "R2 moyenne simple"),
+                                  ("R3_ponderee_pct", "#1baf7a", "R3 pondérée (évolution nationale)")):
+        ax.plot(refs.index, refs[colonne], marker="o", markersize=4, linewidth=2, color=couleur, label=nom)
+    ax.axhline(0, color="#6b6a64", linewidth=0.8)
+    ax.set_ylabel("évolution de l'activité (%)", color="#6b6a64")
+    ax.set_title("Références candidates, par passage t -> t+1", loc="left", fontsize=11)
+    ax.grid(axis="y", color="#e6e5e0")
+    for cote in ("top", "right"):
+        ax.spines[cote].set_visible(False)
+    ax.tick_params(axis="x", rotation=45)
+    ax.legend(frameon=False, fontsize=9)
+    fig.tight_layout()
+    fig.savefig(figures / "references_candidates.png", dpi=130)
+    plt.close(fig)
+
+    print(f"\nTableaux écrits dans {tableaux.relative_to(racine_projet())}, figure dans "
+          f"{figures.relative_to(racine_projet())}")
 
 
 if __name__ == "__main__":
