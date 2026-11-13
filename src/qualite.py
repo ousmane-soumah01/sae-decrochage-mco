@@ -9,6 +9,8 @@ Ces fonctions MESURENT, elles ne corrigent rien.
 
 import pandas as pd
 
+from src.nettoyage import vers_nombre
+
 # Encodages candidats : ceux qu'un fichier français produit sous Windows, Mac ou DOS
 # peut raisonnablement utiliser.
 CANDIDATS_ENCODAGE = ["utf-8", "utf-16", "cp1252", "latin-1", "iso8859_15", "cp850", "mac_roman"]
@@ -102,3 +104,24 @@ def resume_presence(presence):
 def taux_manquants(table):
     """Part de cases vides de chaque colonne (entre 0 et 1)."""
     return table.isna().mean()
+
+
+# --- Types : une colonne contient-elle des nombres, du texte, ou les deux ? --------
+
+def profil_types(table, seuil=0.99):
+    """Pour chaque colonne : cases non vides, part convertible en nombre, type.
+
+    type : « vide » (aucune valeur), « numerique » (au moins `seuil` des valeurs
+    sont des nombres), « texte » (aucune), « mixte » (entre les deux : à examiner).
+    """
+    lignes = []
+    for colonne in table.columns:
+        valeurs = table[colonne].dropna()
+        if valeurs.empty:
+            lignes.append({"colonne": colonne, "non_vides": 0, "part_numerique": None, "type": "vide"})
+            continue
+        part = vers_nombre(valeurs).notna().mean()
+        nature = "numerique" if part >= seuil else ("texte" if part == 0 else "mixte")
+        lignes.append({"colonne": colonne, "non_vides": len(valeurs),
+                       "part_numerique": round(part, 4), "type": nature})
+    return pd.DataFrame(lignes)

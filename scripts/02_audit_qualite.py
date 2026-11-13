@@ -8,6 +8,7 @@ Contrôles :
   1. présence des colonnes selon les années      -> colonnes_par_annee.csv
   2. part de valeurs manquantes                  -> manquants.csv
      (+ figure des quantités d'activité et de capacité de la table MCO)
+  3. types : nombres, texte, ou les deux mêlés    -> types.csv
 Sorties dans resultats/01_qualite_donnees/ (tableaux/ et figures/).
 """
 
@@ -28,7 +29,8 @@ import pandas as pd  # noqa: E402
 
 from src.chargement import lire_table, tables_attendues, trouver_table_extraite  # noqa: E402
 from src.config import charger_config, chemin_donnees, encodage_de_l_annee, racine_projet  # noqa: E402
-from src.qualite import presence_colonnes, resume_presence, taux_manquants  # noqa: E402
+from src.nettoyage import valeurs_non_numeriques  # noqa: E402
+from src.qualite import presence_colonnes, profil_types, resume_presence, taux_manquants  # noqa: E402
 
 # Quantités d'activité et de capacité de la table MCO (journées, séjours, séjours de 0 jour,
 # venues de partielle, lits, places, journées exploitables, par discipline, et séances).
@@ -69,7 +71,7 @@ def main():
     annees = range(d["annee_debut"], d["annee_fin"] + 1)
 
     colonnes = {}            # {table: {annee: [colonnes]}}
-    manquants = []
+    manquants, types, exemples = [], [], {}
     for annee in annees:
         encodage = encodage_de_l_annee(config, annee)
         for table in tables_attendues(d["tables"], annee):
@@ -79,6 +81,12 @@ def main():
             for colonne, taux in taux_manquants(lue).items():
                 manquants.append({"table": nom_stable(table), "annee": annee,
                                   "colonne": colonne, "taux_manquants": round(taux, 4)})
+            for _, ligne in profil_types(lue).iterrows():
+                types.append({"table": nom_stable(table), "annee": annee, **ligne.to_dict()})
+                if ligne["type"] == "mixte":
+                    cle = (nom_stable(table), ligne["colonne"])
+                    exemples.setdefault(cle, set()).update(
+                        valeurs_non_numeriques(lue[ligne["colonne"]]).index[:5])
 
     # 1. Présence des colonnes
     presence = pd.concat([resume_presence(presence_colonnes(par_annee)).assign(table=t)
@@ -113,6 +121,22 @@ def main():
     print(etendue.to_string())
     print("Détail dans resultats/01_qualite_donnees/tableaux/manquants.csv "
           "et figures/manquants_quantites_mco.png")
+
+    # 3. Types
+    types = pd.DataFrame(types)
+    types.to_csv(tableaux / "types.csv", index=False, encoding="utf-8")
+    print("\n3. Types des colonnes (nombre de couples table x colonne x année) :")
+    print(types.groupby(["table", "type"]).size().unstack(fill_value=0).to_string())
+    mixte = types[types.type == "mixte"]
+    print("\n   Colonnes « mixtes » (nombres et texte mêlés) : années concernées et exemples de texte :")
+    if len(mixte):
+        resume = mixte.groupby(["table", "colonne"]).annee.agg(lambda a: " ".join(map(str, sorted(a))))
+        for (table, colonne), annees_mixtes in resume.items():
+            vus = ", ".join(sorted(exemples.get((table, colonne), set()))[:5])
+            print(f"   {table:9s} {colonne:12s} {annees_mixtes}  ->  {vus}")
+    else:
+        print("   aucune")
+    print("Détail dans resultats/01_qualite_donnees/tableaux/types.csv")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from src.qualite import (
     encodages_valides,
     evaluer_encodage,
     presence_colonnes,
+    profil_types,
     resume_presence,
     taux_manquants,
 )
@@ -114,3 +115,20 @@ def test_resume_presence_repere_les_colonnes_irregulieres():
 def test_taux_manquants():
     t = pd.DataFrame({"a": ["1", None, None, "4"], "b": ["1", "2", "3", "4"]})
     assert taux_manquants(t).to_dict() == {"a": 0.5, "b": 0.0}
+
+
+# --- profil_types -----------------------------------------------------------------
+
+def test_profil_types_classe_chaque_colonne():
+    t = pd.DataFrame({
+        "num": ["1", "2,5", "3"],
+        "texte": ["a", "b", "c"],
+        "mixte": ["1", "2", "x"],
+        "vide": [None, None, None],
+    })
+    p = profil_types(t).set_index("colonne")
+    assert p.loc["num", "type"] == "numerique"
+    assert p.loc["texte", "type"] == "texte"
+    assert p.loc["mixte", "type"] == "mixte"
+    assert p.loc["mixte", "part_numerique"] == pytest.approx(2 / 3, abs=1e-4)
+    assert p.loc["vide", "type"] == "vide"
