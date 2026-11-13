@@ -32,6 +32,16 @@ Question 4 : à partir de quel écart à la référence parle-t-on de décrochag
 établissements au-dessus du seuil en t et actifs en t+1. Seuils candidats : -10, -15,
 -20 points (fixes) et la borne de Tukey de l'année (Q1 - 1,5 x écart interquartile).
   - ecarts_par_passage.csv et figure borne_tukey_et_seuils.png.
+
+Question 5 : que faire des établissements inactifs en t+1 (sorties) et des baisses dues à
+un transfert d'activité au sein du même groupe (fi_ej : entité juridique) ?
+  - sorties_par_passage.csv : établissements inactifs en t+1 (absents ou activité nulle) ;
+  - groupes_et_restructurations.csv : pour les décrochages et les sorties, ce que fait le
+    groupe entre t et t+1, et le nombre de « restructurations probables » selon la définition ;
+  - compensation_dans_le_groupe.csv : part de la perte des sites qui décrochent ou sortent,
+    retrouvée dans les autres sites du groupe au-delà de leur croissance normale ;
+  - finess_qui_changent.csv : sorties suivies d'un nouveau numéro dans le même groupe,
+    établissements réapparus après une absence, sites qui changent de groupe.
 """
 
 import sys
@@ -50,7 +60,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from src.activite import calculer_activite, est_eligible  # noqa: E402
-from src.cible import construire_passages, reference_ponderee  # noqa: E402
+from src.cible import construire_passages, ecarts_et_decrochages, reference_ponderee  # noqa: E402
 from src.config import charger_config, chemin_donnees, racine_projet  # noqa: E402
 
 COMPOSANTES = ["jou_mco", "sejhc_mco", "sej0_mco", "sejhp_mco", "sea_mco"]
@@ -240,6 +250,136 @@ def main():
     fig.tight_layout()
     fig.savefig(figures / "borne_tukey_et_seuils.png", dpi=130)
     plt.close(fig)
+
+    # --- Question 5 : sorties et restructurations -----------------------------------
+    p = ecarts_et_decrochages(passages, config)
+    presents_t1 = set(zip(panel["fi"], panel["an"]))
+    p["absent_t1"] = [(fi, t1) not in presents_t1 for fi, t1 in zip(p["fi"], p["t1"])]
+    sorties = p[~p["actif_t1"]]
+    par_passage = p.groupby("t").agg(etablissements=("fi", "size"),
+                                     decrochages=("decrochage", "sum"),
+                                     inactifs_t1=("actif_t1", lambda x: int((~x).sum())))
+    par_passage["dont_absents_t1"] = sorties.groupby("t")["absent_t1"].sum()
+    par_passage["dont_presents_activite_nulle"] = par_passage["inactifs_t1"] - par_passage["dont_absents_t1"]
+    par_passage["activite_t_mediane_des_inactifs"] = sorties.groupby("t")["activite_t"].median()
+    par_passage = par_passage.fillna(0)
+    par_passage.index = [f"{t}->{t + 1}" for t in par_passage.index]
+    par_passage.round(1).to_csv(tableaux / "sorties_par_passage.csv")
+    print("\n9. Établissements inactifs en t+1 (au-dessus du seuil en t), par passage :")
+    print(par_passage.round(0).astype(int).to_string())
+
+    # Groupes (fi_ej) : activité des sites actifs, en t et en t+1 (même code fi_ej)
+    actifs_panel = panel[panel["activite"] > 0]
+    groupes = actifs_panel.groupby(["fi_ej", "an"]).agg(activite_ej=("activite", "sum"),
+                                                         sites_ej=("fi", "nunique")).reset_index()
+    g_t = groupes.rename(columns={"an": "t", "activite_ej": "activite_ej_t"})
+    g_t1 = groupes.assign(t=groupes["an"] - 1)[["fi_ej", "t", "activite_ej"]].rename(
+        columns={"activite_ej": "activite_ej_t1"})
+    g = g_t.merge(g_t1, on=["fi_ej", "t"], how="left")
+    g["groupe_actif_t1"] = g["activite_ej_t1"] > 0
+    ref_groupes = (g[g["groupe_actif_t1"]].groupby("t")[["activite_ej_t", "activite_ej_t1"]].sum()
+                   .pipe(lambda x: x["activite_ej_t1"] / x["activite_ej_t"] - 1))
+    g["ecart_groupe_points"] = 100 * (g["activite_ej_t1"] / g["activite_ej_t"] - 1 - g["t"].map(ref_groupes))
+    g["groupe_decroche"] = ~g["groupe_actif_t1"] | (g["ecart_groupe_points"] < -config["cible"]["ecart_points"])
+
+    cas = p[p["decrochage"] | ~p["actif_t1"]].merge(
+        g[["fi_ej", "t", "sites_ej", "groupe_decroche"]], on=["fi_ej", "t"], how="left")
+    cas["groupe_decroche"] = cas["groupe_decroche"].fillna(True).astype(bool)
+    cas["nature"] = cas["decrochage"].map({True: "decrochage", False: "sortie"})
+    nouveaux_fi = {(ej, t) for ej, t, fi in zip(panel["fi_ej"], panel["an"], panel["fi"])}
+    fi_par_ej_an = panel.groupby(["fi_ej", "an"])["fi"].apply(set).to_dict()
+    cas["nouveau_site_dans_le_groupe_t1"] = [
+        bool(fi_par_ej_an.get((ej, t + 1), set()) - fi_par_ej_an.get((ej, t), set()))
+        for ej, t in zip(cas["fi_ej"], cas["t"])]
+    definitions = {
+        "groupe_ne_decroche_pas": ~cas["groupe_decroche"],
+        "groupe_ne_decroche_pas_et_2_sites_ou_plus": ~cas["groupe_decroche"] & (cas["sites_ej"] >= 2),
+        "groupe_ne_decroche_pas_et_(2_sites_ou_plus_ou_sortie)":
+            ~cas["groupe_decroche"] & ((cas["sites_ej"] >= 2) | (cas["nature"] == "sortie")),
+    }
+    lignes = []
+    for nature, sous in cas.groupby("nature"):
+        ligne = {"nature": nature, "cas": len(sous),
+                 "dans_un_groupe_de_2_sites_ou_plus": int((sous["sites_ej"] >= 2).sum()),
+                 "nouveau_site_dans_le_groupe_en_t1": int(sous["nouveau_site_dans_le_groupe_t1"].sum())}
+        for nom, masque in definitions.items():
+            ligne[nom] = int(masque[sous.index].sum())
+        lignes.append(ligne)
+    restr = pd.DataFrame(lignes).set_index("nature")
+    restr.to_csv(tableaux / "groupes_et_restructurations.csv")
+    print("\n10. Décrochages et sorties (toutes années) : ce que fait le groupe (fi_ej) entre t et t+1 :")
+    print(restr.T.to_string())
+
+    # --- 5b. Compensation dans le groupe ----------------------------------------------
+    # Pour chaque groupe et chaque passage : perte totale des sites qui décrochent ou sortent,
+    # et gain des autres sites du groupe AU-DELÀ de la référence nationale (croissance normale) ;
+    # un site nouveau dans le groupe en t+1 compte pour toute son activité.
+    ref = reference_ponderee(passages)
+    vus = panel[panel["activite"] > 0][["fi", "an", "fi_ej", "activite"]]
+    lignes = []
+    cles_cas = set(zip(cas["fi"], cas["t"]))
+    for (ej, t), cas_groupe in cas.groupby(["fi_ej", "t"]):
+        sites_t = vus[(vus["fi_ej"] == ej) & (vus["an"] == t)].set_index("fi")["activite"]
+        sites_t1 = vus[(vus["fi_ej"] == ej) & (vus["an"] == t + 1)].set_index("fi")["activite"]
+        perte = float((cas_groupe["activite_t"] - cas_groupe["activite_t1"].fillna(0).clip(lower=0)).sum())
+        gain = 0.0
+        for fi, a1 in sites_t1.items():
+            if (fi, t) in cles_cas:
+                continue
+            gain += a1 - sites_t.get(fi, 0.0) * (1 + ref[t]) if fi in sites_t.index else a1
+        lignes.append({"fi_ej": ej, "t": t, "cas": len(cas_groupe), "sites_t": len(sites_t),
+                       "perte": perte, "gain_hors_croissance_normale": gain,
+                       "compensation": gain / perte if perte > 0 else float("nan")})
+    comp = pd.DataFrame(lignes)
+    comp.round(3).to_csv(tableaux / "compensation_dans_le_groupe.csv", index=False)
+    cas = cas.merge(comp[["fi_ej", "t", "compensation"]], on=["fi_ej", "t"], how="left")
+    print("\n11. Compensation dans le groupe (gain des autres sites au-delà de la référence / perte) :")
+    seuils_comp = (0.5, 0.8)
+    tableau = []
+    for nature, sous in cas.groupby("nature"):
+        ligne = {"nature": nature, "cas": len(sous),
+                 "groupe_de_2_sites_ou_plus": int((sous["sites_ej"] >= 2).sum()),
+                 "compensation_mediane_(2_sites_ou_plus)": round(sous.loc[sous["sites_ej"] >= 2, "compensation"].median(), 2)}
+        for seuil in seuils_comp:
+            ligne[f"compensation_au_moins_{int(100 * seuil)}pct"] = int((sous["compensation"] >= seuil).sum())
+        ligne["groupe_ne_decroche_pas"] = int((~sous["groupe_decroche"]).sum())
+        ligne["groupe_ne_decroche_pas_mais_compensation_<50pct"] = int(
+            (~sous["groupe_decroche"] & ~(sous["compensation"] >= 0.5)).sum())
+        tableau.append(ligne)
+    print(pd.DataFrame(tableau).set_index("nature").T.to_string())
+    taille = cas[~cas["groupe_decroche"]].assign(
+        taille=pd.cut(cas["sites_ej"], [0, 1, 2, 5, 1000], labels=["1 site", "2 sites", "3-5 sites", "6 sites et +"]))
+    print("\n    Parmi les cas où le groupe ne décroche pas : taille du groupe et compensation médiane")
+    print(taille.groupby("taille", observed=True)["compensation"].agg(["size", "median"]).round(2).to_string())
+
+    # --- 5c. Les FINESS qui changent ---------------------------------------------------
+    presence = panel.groupby("fi")["an"].apply(set).to_dict()
+    sorties_cas = cas[cas["nature"] == "sortie"].copy()
+    sorties_cas["reapparu_plus_tard"] = [any(a > t1 for a in presence[fi]) for fi, t1 in
+                                         zip(sorties_cas["fi"], sorties_cas["t1"])]
+    sorties_cas["presente_en_t+2"] = [(t1 + 1) in presence[fi] for fi, t1 in zip(sorties_cas["fi"], sorties_cas["t1"])]
+    # Nouveau numéro dans le même groupe en t+1, d'activité comparable (entre la moitié et le double)
+    successeurs = []
+    for _, sortie in sorties_cas.iterrows():
+        nouveaux = vus[(vus["fi_ej"] == sortie["fi_ej"]) & (vus["an"] == sortie["t1"])]
+        nouveaux = nouveaux.loc[nouveaux["fi"].map(lambda f: sortie["t"] not in presence[f]).astype(bool)]
+        comparables = nouveaux[(nouveaux["activite"] >= 0.5 * sortie["activite_t"])
+                               & (nouveaux["activite"] <= 2 * sortie["activite_t"])]
+        successeurs.append(len(comparables) > 0)
+    sorties_cas["successeur_comparable_meme_groupe"] = successeurs
+    # Sites qui changent de groupe (fi_ej différent entre t et t+1)
+    change_groupe = p[p["actif_t1"] & p["fi_ej_t1"].notna() & (p["fi_ej"] != p["fi_ej_t1"])]
+    finess = pd.DataFrame({
+        "sorties": [len(sorties_cas)],
+        "dont_reapparues_plus_tard": [int(sorties_cas["reapparu_plus_tard"].sum())],
+        "dont_presentes_en_t+2": [int(sorties_cas["presente_en_t+2"].sum())],
+        "dont_successeur_comparable_dans_le_groupe": [int(sorties_cas["successeur_comparable_meme_groupe"].sum())],
+        "passages_avec_changement_de_groupe": [len(change_groupe)],
+        "dont_decrochage": [int(change_groupe["decrochage"].sum())],
+    }).T.rename(columns={0: "valeur"})
+    finess.to_csv(tableaux / "finess_qui_changent.csv")
+    print("\n12. Les FINESS qui changent (toutes années) :")
+    print(finess.to_string())
 
     print(f"\nTableaux écrits dans {tableaux.relative_to(racine_projet())}, figures dans "
           f"{figures.relative_to(racine_projet())}")

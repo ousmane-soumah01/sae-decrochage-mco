@@ -63,3 +63,7 @@ perimetre:
 cible:
   reference: moyenne_ponderee            # évolution nationale = somme(activité t+1) / somme(activité t) - 1
   ecart_points: 15                       # décrochage si évolution < référence - 15 points
+  sortie_est_un_decrochage: true         # absent ou sans activité en t+1 => y = 1 (sauf réapparition)
+  compensation_min: 0.5                  # restructuration probable si >= 50 % de la perte est retrouvée
+                                         # dans le groupe (ou site cité dans une fusion / scission)
+  retirer_restructurations: true         # restructurations probables retirées des lignes évaluées

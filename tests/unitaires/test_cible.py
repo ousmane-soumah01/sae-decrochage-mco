@@ -9,7 +9,14 @@ Passage 2023 -> 2024 (activités en journées-équivalentes, seuil 1 000) :
 import pandas as pd
 import pytest
 
-from src.cible import construire_passages, ecarts_et_decrochages, reference_ponderee
+from src.cible import (
+    citations_fusion_scission,
+    classer,
+    construire_passages,
+    ecarts_et_decrochages,
+    reference_ponderee,
+    restructurations,
+)
 from src.config import charger_config
 
 pytestmark = pytest.mark.unitaire
@@ -78,3 +85,91 @@ def test_decrochage_suit_l_ecart_de_config(config):
     config["cible"]["ecart_points"] = 5                             # variante de robustesse
     p = ecarts_et_decrochages(construire_passages(panel_exemple(), config), config).set_index("fi")
     assert p.loc["C", "decrochage"]                                  # -7,9 points < -5
+
+# --- classer : sorties et réapparitions ---------------------------------------------
+
+def test_classer_retrouve_les_verdicts_a_la_main(config):
+    panel = panel_exemple()
+    c = classer(construire_passages(panel, config), panel, config).set_index("fi")
+    assert c["classe"].to_dict() == {"A": "stable", "B": "decrochage", "C": "stable", "D": "sortie"}
+    assert c["y"].to_dict() == {"A": 0, "B": 1, "C": 0, "D": 1}
+
+
+def test_classer_reapparition_donne_une_classe_inconnue(config):
+    # X : présent en 2023, absent en 2024, de retour en 2025 -> activité 2024 inconnue.
+    panel = pd.DataFrame({"fi": ["X", "X", "R", "R", "R"], "an": [2023, 2025, 2023, 2024, 2025],
+                          "fi_ej": ["E1"] * 2 + ["E2"] * 3, "activite": [5000.0, 5000.0, 9000.0, 9000.0, 9000.0]})
+    c = classer(construire_passages(panel, config), panel, config)
+    x = c[(c.fi == "X") & (c.t == 2023)].iloc[0]
+    assert x["classe"] == "inconnue" and pd.isna(x["y"])
+
+
+# --- restructurations ---------------------------------------------------------------
+
+def identite_vide():
+    return pd.DataFrame({"fi": pd.Series(dtype=str), "an": pd.Series(dtype=int)})
+
+
+def avec_restructurations(panel, config, identite=None):
+    classes = classer(construire_passages(panel, config), panel, config)
+    return restructurations(classes, panel, identite if identite is not None else identite_vide(),
+                            config).set_index("fi")
+
+
+def test_transfert_entre_deux_sites_du_groupe(config):
+    # Le site 1 perd 4 000, le site 2 du même groupe G en gagne 4 000 ; H, stable, fixe la référence à 0.
+    panel = pd.DataFrame({
+        "fi": ["1", "1", "2", "2", "9", "9"], "an": [2023, 2024] * 3,
+        "fi_ej": ["G", "G", "G", "G", "H", "H"],
+        "activite": [10_000.0, 6_000.0, 10_000.0, 14_000.0, 100_000.0, 100_000.0]})
+    c = avec_restructurations(panel, config)
+    assert c.loc["1", "classe"] == "decrochage"
+    assert c.loc["1", "compensation"] == pytest.approx(1.0)        # 4 000 retrouvés sur 4 000 perdus
+    assert c.loc["1", "restructuration_probable"] == 1
+    assert c.loc["2", "restructuration_probable"] == 0              # y = 0
+
+
+def test_changement_de_finess_dans_le_meme_groupe(config):
+    # Le numéro « ancien » disparaît, un « nouveau » numéro du même groupe reprend l'activité.
+    panel = pd.DataFrame({"fi": ["ancien", "nouveau", "9", "9"], "an": [2023, 2024, 2023, 2024],
+                          "fi_ej": ["G", "G", "H", "H"], "activite": [10_000.0, 10_200.0, 100_000.0, 100_000.0]})
+    c = avec_restructurations(panel, config)
+    assert c.loc["ancien", "classe"] == "sortie"
+    assert c.loc["ancien", "restructuration_probable"] == 1
+
+
+def test_vrai_declin_sans_compensation(config):
+    # Le site 1 perd 4 000, le site 2 du groupe ne gagne rien : pas de restructuration.
+    panel = pd.DataFrame({
+        "fi": ["1", "1", "2", "2", "9", "9"], "an": [2023, 2024] * 3,
+        "fi_ej": ["G", "G", "G", "G", "H", "H"],
+        "activite": [10_000.0, 6_000.0, 10_000.0, 10_000.0, 100_000.0, 100_000.0]})
+    assert avec_restructurations(panel, config).loc["1", "restructuration_probable"] == 0
+
+
+def test_grand_groupe_qui_grandit_normalement_ne_compense_pas(config):
+    # A perd 1 000 ; B, du même groupe, croît comme la France : ce n'est pas un transfert.
+    panel = pd.DataFrame({
+        "fi": ["A", "A", "B", "B", "H", "H"], "an": [2023, 2024] * 3,
+        "fi_ej": ["G", "G", "G", "G", "K", "K"],
+        "activite": [2_000.0, 1_000.0, 100_000.0, 103_000.0, 1_000_000.0, 1_030_000.0]})
+    c = avec_restructurations(panel, config)
+    assert c.loc["A", "classe"] == "decrochage"
+    assert c.loc["A", "compensation"] < 0.5                          # B ne gagne presque rien au-delà de la référence
+    assert c.loc["A", "restructuration_probable"] == 0
+
+
+def test_site_cite_dans_une_fusion_declaree_par_un_autre_groupe(config):
+    # X disparaît en 2024 ; Y, d'un autre groupe, déclare en 2024 une fusion avec X.
+    panel = pd.DataFrame({"fi": ["X", "Y", "Y"], "an": [2023, 2023, 2024],
+                          "fi_ej": ["EX", "EY", "EY"], "activite": [5_000.0, 50_000.0, 50_000.0]})
+    identite = pd.DataFrame({"fi": ["Y"], "an": [2024], "fifu1": ["X"]})
+    assert citations_fusion_scission(identite) == {("X", 2024)}
+    c = avec_restructurations(panel, config, identite)
+    assert c.loc["X", "cite_fusion_scission"] and c.loc["X", "restructuration_probable"] == 1
+
+
+def test_changement_de_groupe(config):
+    panel = pd.DataFrame({"fi": ["Z", "Z"], "an": [2023, 2024], "fi_ej": ["E1", "E2"],
+                          "activite": [5_000.0, 5_000.0]})
+    assert avec_restructurations(panel, config).loc["Z", "changement_de_groupe"] == 1

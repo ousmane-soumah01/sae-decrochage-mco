@@ -39,7 +39,8 @@ CONFIG_MINIMALE = {
         "poids_sejours_0_jour": 0.5,
     },
     "perimetre": {"seuil_petits_etablissements": 1000},
-    "cible": {"reference": "moyenne_ponderee", "ecart_points": 15},
+    "cible": {"reference": "moyenne_ponderee", "ecart_points": 15, "sortie_est_un_decrochage": True,
+              "compensation_min": 0.5, "retirer_restructurations": True},
 }
 
 
@@ -154,4 +155,10 @@ def test_verifier_config_refuse_une_reference_inconnue(config):
 def test_verifier_config_refuse_un_ecart_nul(config):
     config["cible"]["ecart_points"] = 0
     with pytest.raises(ValueError, match="ecart_points"):
+        verifier_config(config)
+
+@pytest.mark.parametrize("valeur", [0, 1.5])
+def test_verifier_config_refuse_une_compensation_hors_de_0_1(config, valeur):
+    config["cible"]["compensation_min"] = valeur
+    with pytest.raises(ValueError, match="compensation_min"):
         verifier_config(config)

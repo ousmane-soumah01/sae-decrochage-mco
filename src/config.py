@@ -24,7 +24,8 @@ CLES_OBLIGATOIRES = {
     "activite": ["colonne_journees_complete", "colonne_venues_partielle",
                  "colonne_sejours_0_jour", "poids_partielle", "poids_sejours_0_jour"],
     "perimetre": ["seuil_petits_etablissements"],
-    "cible": ["reference", "ecart_points"],
+    "cible": ["reference", "ecart_points", "sortie_est_un_decrochage", "compensation_min",
+              "retirer_restructurations"],
 }
 
 # Références d'évolution que le code sait calculer.
@@ -78,6 +79,8 @@ def verifier_config(config):
                          f"(possible : {sorted(REFERENCES_CONNUES)}).")
     if config["cible"]["ecart_points"] <= 0:
         raise ValueError("cible.ecart_points doit être strictement positif.")
+    if not 0 < config["cible"]["compensation_min"] <= 1:
+        raise ValueError("cible.compensation_min doit être dans ]0 ; 1].")
 
 
 def charger_config(chemin=None):

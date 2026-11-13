@@ -69,3 +69,30 @@ L'écart à la référence, en points, est l'évolution de l'établissement moin
 - la borne de Tukey descend à −22,4 et −23,9 points en 2019→20 et 2020→21 : une règle qui la suivrait serait moins sévère précisément pendant la crise (3,2 % de décrochages en 2019→20, contre 5,6 % en 2013→14) ;
 - avec −15 points fixe : 5,2 à 6,4 % de décrochages les années normales, 8,1 % et 11,3 % pendant le Covid ; le décrochage garde le même sens chaque année.
 Variantes gardées pour l'analyse de robustesse : −10 points et la règle de Tukey.
+*Points et pourcentages.* L'évolution d'un établissement s'exprime en % ; l'écart entre deux pourcentages s'exprime en points. « Référence − 15 points » n'est donc ni « −15 % » ni « 15 % de la référence » : le seuil en % dépend de l'année. Il vaut −13,58 % en 2023→24 (référence +1,42 %), −15,42 % en 2018→19 (référence −0,42 %) et −24,47 % en 2019→20 (référence −9,47 %) : pendant le Covid, un établissement à −15 % a suivi le mouvement général et ne décroche pas.
+
+**Sorties : un établissement inactif en t+1 décroche (y = 1)** *(validé le 13/11/2026)*
+Pré-analyse (`sorties_par_passage.csv`) : 7 à 30 sorties par passage, 226 en tout, presque toutes des disparitions de la SAE (2 seulement présentes avec une activité nulle) ; ce ne sont pas des établissements minuscules (activité médiane l'année d'avant : 2 670 à 10 873 journées-équivalentes). Disparaître est le décrochage le plus extrême. Exception : 13 sorties réapparaissent plus tard dans la SAE (7 dès l'année suivante) ; leur activité en t+1 est inconnue (trou de déclaration ou fermeture temporaire) : classe « inconnue », retirées des lignes évaluées.
+
+**Restructurations probables : la baisse retrouvée ailleurs, mesurée ou déclarée** *(validé le 13/11/2026)*
+Un décrochage ou une sortie est une restructuration probable si (1) au moins 50 % de la perte du site est retrouvée dans les autres sites du même groupe, au-delà de leur croissance normale (un nouveau numéro FINESS dans le groupe compte pour toute son activité), ou (2) si le FINESS du site est cité dans une fusion ou une scission déclarée par un autre établissement (`fifu1-3`, `scfu1-3`), en t ou en t+1. Les restructurations probables sont gardées dans la table, avec un indicateur, et retirées des lignes évaluées ; au test final, les scores sont donnés avec et sans elles.
+Pourquoi pas « le groupe ne décroche pas » : un groupe peut absorber la baisse d'un site sans rien lui reprendre (les autres sites croissent normalement). Pré-analyse (`compensation_dans_le_groupe.csv`, `groupes_et_restructurations.csv`, `finess_qui_changent.csv`), sur 1 143 décrochages et 226 sorties :
+- la compensation médiane, dans les groupes d'au moins 2 sites, vaut 24 % pour les décrochages et 98 % pour les sorties : quand un site disparaît dans un groupe, son activité réapparaît presque toujours ailleurs dans le groupe ; quand un site baisse, presque jamais ;
+- l'ancienne règle aurait classé en restructuration 172 décrochages dont moins de la moitié de la perte se retrouve dans le groupe ; dans les groupes de 6 sites ou plus, la compensation médiane est nulle (−4 %) : le groupe ne baisse pas parce qu'il est grand ;
+- la citation dans une fusion ou une scission repère des cas que la compensation ne voit pas (absorption par un établissement d'un autre groupe) : 24 décrochages et 20 sorties sans compensation ;
+- au total : 183 décrochages et 118 sorties, contre 429 cas avec l'ancienne règle ; une fois retirées les 13 réapparitions (classe « inconnue »), le code (`src/cible.py`) compte 183 décrochages et 114 sorties restructurations probables, sur 1 143 décrochages et 213 sorties.
+`modej` (« modification de l'entité juridique ») n'est pas une preuve de transfert (un rachat ne déplace pas l'activité) : on le garde comme information, avec l'indicateur `changement_de_groupe` (186 passages). Variantes pour l'analyse de robustesse : compensation de 80 %, compensation seule sans les fusions, ancienne règle. Limite : la SAE ne suit pas les patients ; une restructuration reste une présomption.
+
+## Définitions en phrases simples
+
+- **FINESS** : le numéro d'identification de chaque établissement de santé en France (9 caractères). Un **site** (FINESS géographique, `fi`) est un lieu précis où l'on soigne ; une **entité juridique** (FINESS juridique, `fi_ej`) est la structure qui le possède et le gère, et peut avoir plusieurs sites.
+- **Groupe** : dans ce projet, l'ensemble des sites qui ont la même entité juridique une année donnée.
+- **Sortie** : un établissement présent et actif en t qui n'apparaît plus, ou n'a plus d'activité, l'année suivante.
+- **Réapparition** : un établissement absent une année puis de nouveau présent plus tard ; son activité pendant l'absence est inconnue.
+- **Fusion** : deux établissements (ou plus) n'en forment plus qu'un ; l'activité de celui qui est absorbé passe chez l'autre, qui la déclare sous son propre numéro.
+- **Scission** : un établissement est coupé en plusieurs ; une partie de son activité continue sous un autre numéro.
+- **Changement de numéro FINESS** : le même lieu de soins est déclaré sous un nouveau numéro (souvent après une fusion ou un changement de gestionnaire).
+- **Changement d'entité juridique** : le site change de propriétaire ou de gestionnaire (rachat, reprise) ; il continue de soigner au même endroit.
+- **Transfert d'activité** : un service ferme sur un site et rouvre sur un autre site du même groupe ; le premier baisse, le second augmente.
+- **Compensation** : la part de ce qu'un site a perdu qu'on retrouve en plus dans les autres sites de son groupe, au-delà de leur croissance normale.
+- **Restructuration probable** : une baisse ou une disparition qui s'explique très probablement par un transfert, une fusion ou une scission plutôt que par un vrai déclin.
