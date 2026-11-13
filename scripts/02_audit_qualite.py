@@ -11,6 +11,7 @@ Contrôles :
   3. types : nombres, texte, ou les deux mêlés    -> types.csv
   4. clés : doublons, FINESS mal formés, année ; -> cles.csv
      cohérence : établissements absents de ID     -> coherence_tables.csv
+  5. règles de cohérence de l'activité MCO        -> controles_mco.csv
 Sorties dans resultats/01_qualite_donnees/ (tableaux/ et figures/).
 """
 
@@ -35,6 +36,7 @@ from src.nettoyage import valeurs_non_numeriques  # noqa: E402
 from src.qualite import (  # noqa: E402
     absents,
     annees_incoherentes,
+    controles_activite_mco,
     doublons_cle,
     finess_invalides,
     presence_colonnes,
@@ -87,7 +89,7 @@ def main():
     annees = range(d["annee_debut"], d["annee_fin"] + 1)
 
     colonnes = {}            # {table: {annee: [colonnes]}}
-    manquants, types, exemples, cles, coherence = [], [], {}, [], []
+    manquants, types, exemples, cles, coherence, mco = [], [], {}, [], [], []
     for annee in annees:
         encodage = encodage_de_l_annee(config, annee)
         lues = {}
@@ -111,6 +113,9 @@ def main():
                          "lignes_cle_en_double": len(doublons_cle(lue, cle_table)),
                          "finess_mal_formes": int(finess_invalides(lue["fi"]).sum()),
                          "an_different_de_l_annee": annees_incoherentes(lue, annee)})
+
+        # Règles de l'activité MCO
+        mco.append({"annee": annee, **controles_activite_mco(lues["MCO"])})
 
         # Cohérence : chaque table comparée à ID, la carte d'identité des établissements
         for table, lue in lues.items():
@@ -182,6 +187,17 @@ def main():
     print("\n   Cohérence : FINESS absents de la table ID (total sur les années, par table) :")
     print(coherence.groupby("table").finess_absents_de_ID.sum().to_string())
     print("Détail dans resultats/01_qualite_donnees/tableaux/cles.csv et coherence_tables.csv")
+
+    # 5. Règles de l'activité MCO
+    mco = pd.DataFrame(mco)
+    mco.to_csv(tableaux / "controles_mco.csv", index=False, encoding="utf-8")
+    noms_courts = {"activite_entierement_vide": "vide", "aucun_sejour": "aucun_sejour",
+                   "valeur_negative": "negatif", "sej0_superieur_a_sejhc": "sej0>sejhc",
+                   "jou_inferieur_aux_sejours_non_nuls": "jou_trop_bas",
+                   "journees_sans_sejour": "jou_sans_sejour"}
+    print("\n5. Règles de l'activité MCO (nombre de lignes concernées, par année) :")
+    print(mco.rename(columns=noms_courts).to_string(index=False))
+    print("Détail dans resultats/01_qualite_donnees/tableaux/controles_mco.csv")
 
 
 if __name__ == "__main__":

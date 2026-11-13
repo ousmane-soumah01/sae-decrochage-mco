@@ -150,3 +150,28 @@ def annees_incoherentes(table, annee):
 def absents(fi_a, fi_b):
     """FINESS présents dans fi_a mais absents de fi_b (liste triée, sans doublon)."""
     return sorted(set(fi_a.dropna()) - set(fi_b.dropna()))
+
+
+# --- Règles de cohérence de l'activité MCO --------------------------------------
+
+def controles_activite_mco(table):
+    """Compte les lignes de la table MCO qui enfreignent une règle de cohérence.
+
+    Renvoie un dictionnaire {règle: nombre de lignes}. Rien n'est corrigé.
+    Une case vide compte comme 0 dans les comparaisons.
+    """
+    n = {c: vers_nombre(table[c]) for c in ("sejhc_mco", "sej0_mco", "jou_mco", "sejhp_mco")}
+    hc, hc0 = n["sejhc_mco"].fillna(0), n["sej0_mco"].fillna(0)
+    jou, hp = n["jou_mco"].fillna(0), n["sejhp_mco"].fillna(0)
+    toutes_vides = pd.concat(list(n.values()), axis=1).isna().all(axis=1)
+    return {
+        "lignes": len(table),
+        "activite_entierement_vide": int(toutes_vides.sum()),
+        "aucun_sejour": int(((hc + hp) == 0).sum()),
+        "valeur_negative": int(pd.concat([s < 0 for s in n.values()], axis=1).any(axis=1).sum()),
+        # Les séjours de 0 jour font partie des séjours d'hospitalisation complète
+        "sej0_superieur_a_sejhc": int((hc0 > hc).sum()),
+        # Un séjour d'au moins une nuit compte au moins une journée : jou >= sejhc - sej0
+        "jou_inferieur_aux_sejours_non_nuls": int((jou < hc - hc0).sum()),
+        "journees_sans_sejour": int(((jou > 0) & (hc == 0)).sum()),
+    }

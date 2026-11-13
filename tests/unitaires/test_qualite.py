@@ -7,6 +7,7 @@ from src.qualite import (
     CANDIDATS_ENCODAGE,
     absents,
     annees_incoherentes,
+    controles_activite_mco,
     doublons_cle,
     encodages_valides,
     evaluer_encodage,
@@ -166,3 +167,30 @@ def test_absents():
     a = pd.Series(["1", "2", "3", "3", None])
     b = pd.Series(["2"])
     assert absents(a, b) == ["1", "3"]
+
+
+# --- controles_activite_mco -----------------------------------------------------
+
+def test_controles_activite_mco_compte_chaque_regle():
+    # Chaque ligne n'enfreint qu'UNE règle (la valeur négative est sur sejhp_mco :
+    # un nombre de séjours négatif ferait aussi passer sej0 > sejhc).
+    t = pd.DataFrame({
+        #           normal  vide   sej0>hc  jou trop bas  journées sans séjour  négatif
+        "sejhc_mco": ["10",  None,  "2",     "10",         "0",                  "1"],
+        "sej0_mco":  ["2",   None,  "5",     "0",          "0",                  "0"],
+        "jou_mco":   ["30",  None,  "0",     "5",          "7",                  "1"],
+        "sejhp_mco": ["4",   None,  "0",     "0",          "0",                  "-1"],
+    })
+    c = controles_activite_mco(t)
+    assert c["lignes"] == 6
+    assert c["activite_entierement_vide"] == 1
+    assert c["sej0_superieur_a_sejhc"] == 1
+    assert c["jou_inferieur_aux_sejours_non_nuls"] == 1   # 5 journées pour 10 séjours d'au moins une nuit
+    assert c["journees_sans_sejour"] == 1
+    assert c["valeur_negative"] == 1
+
+
+def test_controles_activite_mco_ligne_correcte_ne_declenche_rien():
+    t = pd.DataFrame({"sejhc_mco": ["10"], "sej0_mco": ["2"], "jou_mco": ["30"], "sejhp_mco": ["4"]})
+    c = controles_activite_mco(t)
+    assert all(v == 0 for k, v in c.items() if k != "lignes")
