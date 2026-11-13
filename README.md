@@ -46,6 +46,7 @@ python scripts/01_extraire.py          # extrait les 7 tables utiles, prouve l'e
 python scripts/02_audit_qualite.py     # audit : colonnes, manquants, types, clés, règles de l'activité MCO
 python scripts/03_panel.py             # panel : une ligne par établissement et par année
 python scripts/04_preanalyse.py        # pré-analyse des règles de la cible
+python scripts/06_dictionnaire.py      # dictionnaire des colonnes du panel (docs/dictionnaire.md)
 python -m pytest                       # tous les tests (unitaires et intégration)
 ```
 
@@ -60,7 +61,7 @@ Chaque script dit, en tête de fichier, ce qu'il produit.
 | `scripts/` | étapes numérotées, à lancer dans l'ordre |
 | `tests/` | tests unitaires (une fonction à la fois) et test d'intégration (de bout en bout) |
 | `resultats/` | tableaux et figures produits par les scripts, rangés par étape |
-| `docs/` | journal des décisions et journal du nettoyage des données |
+| `docs/` | journal des décisions, journal du nettoyage des données, dictionnaire des colonnes du panel |
 
 ## Où en est le projet
 
