@@ -47,3 +47,12 @@ activite:
   colonne_sejours_0_jour: sej0_mco       # séjours de complète de 0 jour (0 journée dans jou_mco)
   poids_partielle: 0.5
   poids_sejours_0_jour: 0.5              # comptés comme une venue de partielle
+
+# -----------------------------------------------------------------------------
+# Périmètre (docs/decisions.md)
+# -----------------------------------------------------------------------------
+perimetre:
+  activite: MCO                          # médecine, chirurgie, obstétrique (pas SMR, PSY, HAD)
+  territoire: France                     # analyse par région ensuite (zoom Occitanie)
+  seuil_petits_etablissements: 1000      # journées-équivalentes en t : en dessous, l'établissement
+                                         # n'entre pas dans l'étude (évolutions trop instables)

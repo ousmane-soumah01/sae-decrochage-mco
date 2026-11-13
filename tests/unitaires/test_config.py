@@ -38,6 +38,7 @@ CONFIG_MINIMALE = {
         "poids_partielle": 0.5,
         "poids_sejours_0_jour": 0.5,
     },
+    "perimetre": {"seuil_petits_etablissements": 1000},
 }
 
 
@@ -105,6 +106,7 @@ def test_charger_config_lit_le_vrai_config_du_projet():
     assert config["donnees"]["annee_fin"] == 2025
     assert config["donnees"]["cle"] == ["fi", "an"]
     assert config["activite"]["poids_partielle"] == 0.5
+    assert config["perimetre"]["seuil_petits_etablissements"] == 1000
 
 
 # --- chemin_donnees ---
@@ -135,4 +137,9 @@ def test_verifier_config_refuse_un_poids_hors_de_0_1(config, poids):
 def test_verifier_config_signale_une_cle_d_activite_manquante(config):
     del config["activite"]["poids_sejours_0_jour"]
     with pytest.raises(ValueError, match="activite.poids_sejours_0_jour"):
+        verifier_config(config)
+
+def test_verifier_config_refuse_un_seuil_nul(config):
+    config["perimetre"]["seuil_petits_etablissements"] = 0
+    with pytest.raises(ValueError, match="strictement positif"):
         verifier_config(config)

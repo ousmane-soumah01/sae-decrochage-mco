@@ -32,3 +32,26 @@ Pré-analyse (`scripts/04_preanalyse.py`, `resultats/02_preanalyse/tableaux/comp
 - *Journées-équivalentes* : les journées de complète, plus une fraction p d'une journée par venue de partielle et par séjour de 0 jour. Une venue dure une journée, mais rester la nuit n'équivaut pas à venir et repartir : p = 0,5. Pour la ligne médiane, passer de p = 1/3 à p = 1 ne change l'activité que de 6,5 % ; pour 1 077 lignes (établissements surtout ambulatoires), elle double ou plus : p = 1/3 et p = 1 sont gardés pour l'analyse de robustesse.
 
 Les séances (`sea_mco` : dialyse, chimiothérapie, radiothérapie ; environ 10 millions par an, sur 15 527 lignes) sont des actes courts et répétés, d'une autre nature : elles restent hors de l'activité, comme variable explicative.
+
+## Périmètre
+
+**France entière, activité MCO seule** *(06/11/2026)*
+Le MCO, le SMR, la psychiatrie et l'HAD sont des activités différentes : on ne les mélange pas. La France entière donne assez d'exemples pour apprendre ; la région est une variable, et les résultats seront analysés par région (zoom Occitanie).
+
+**Seuil des petits établissements : 1 000 journées-équivalentes en t** *(validé le 13/11/2026)*
+Pour un très petit établissement, quelques journées de plus ou de moins font des évolutions énormes, sans rapport avec un décrochage. Pré-analyse (`seuil_petits_etablissements.csv`, `instabilite_par_taille.csv`), sur les établissements actifs de 2013 à 2025 :
+
+| Seuil | Établissements écartés par an | Part de l'activité nationale écartée (année maximale) |
+|--:|--:|--:|
+| 365 | 23 à 35 | 0,011 % |
+| 1 000 | 56 à 75 | 0,060 % |
+| 3 650 | 219 à 257 | 0,822 % |
+
+| Activité en t | Écart interquartile des évolutions d'une année sur l'autre | Part des évolutions de plus de ±50 % |
+|---|--:|--:|
+| 100 à 365 | 43 points | 21 % |
+| 365 à 1 000 | 48 points | 24 % |
+| 1 000 à 3 650 | 22 points | 8 % |
+| 3 650 et plus | 8,5 points | 1 % |
+
+Entre 365 et 1 000 journées-équivalentes, les établissements sont aussi instables qu'entre 100 et 365 : un seuil à 365 garderait des « décrochages » de bruit. À 1 000, l'instabilité chute nettement, pour 0,06 % de l'activité nationale. Le seuil de 365 est gardé pour l'analyse de robustesse. Les lignes d'activité nulle (1 113) ou inconnue (20) sont écartées quel que soit le seuil.

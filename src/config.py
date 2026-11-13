@@ -23,6 +23,7 @@ CLES_OBLIGATOIRES = {
                 "separateur_csv", "cle", "tables"],
     "activite": ["colonne_journees_complete", "colonne_venues_partielle",
                  "colonne_sejours_0_jour", "poids_partielle", "poids_sejours_0_jour"],
+    "perimetre": ["seuil_petits_etablissements"],
 }
 
 
@@ -62,6 +63,10 @@ def verifier_config(config):
         poids = config["activite"][cle]
         if not 0 <= poids <= 1:
             raise ValueError(f"activite.{cle} doit être entre 0 et 1 (valeur lue : {poids}).")
+
+    # 4. Seuil des petits établissements : strictement positif
+    if config["perimetre"]["seuil_petits_etablissements"] <= 0:
+        raise ValueError("perimetre.seuil_petits_etablissements doit être strictement positif.")
 
 
 def charger_config(chemin=None):

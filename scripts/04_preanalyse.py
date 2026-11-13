@@ -12,6 +12,14 @@ Tableaux dans resultats/02_preanalyse/tableaux/ :
   - composantes_nationales.csv : totaux nationaux de chaque composante, par année ;
   - sejours_0_jour.csv         : les séjours de 0 jour comptent-ils dans les journées ?
   - mesures_comparees.csv      : ce que chaque mesure ignore, et sa sensibilité au poids p.
+
+Question 2 : à partir de quelle activité un établissement entre-t-il dans l'étude ?
+Activité = mesure retenue à la question 1 (src.activite.calculer_activite). Seuils
+candidats comparés (rien n'est fixé dans config.yaml à ce stade) : 0, 365, 1 000, 3 650.
+  - seuil_petits_etablissements.csv : établissements écartés et part de l'activité
+    nationale qu'ils représentent, par seuil et par année ;
+  - instabilite_par_taille.csv : dispersion des évolutions d'une année sur l'autre,
+    par tranche d'activité.
 """
 
 import sys
@@ -25,10 +33,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd  # noqa: E402
 
+from src.activite import calculer_activite  # noqa: E402
 from src.config import charger_config, chemin_donnees, racine_projet  # noqa: E402
 
 COMPOSANTES = ["jou_mco", "sejhc_mco", "sej0_mco", "sejhp_mco", "sea_mco"]
 POIDS_CANDIDATS = {"1/3": 1 / 3, "1/2": 1 / 2, "1": 1.0}
+SEUILS_CANDIDATS = [0, 365, 1000, 3650]
+TRANCHES = [0, 100, 365, 1000, 3650, float("inf")]
+
+
+def evolutions(panel):
+    """Évolution de l'activité entre t et t+1 pour les établissements présents et actifs les deux années.
+
+    Renvoie (fi, an = t, activite_t, evolution). Les disparitions ne sont pas des évolutions.
+    """
+    t = panel.loc[panel["activite"] > 0, ["fi", "an", "activite"]]
+    t1 = t.assign(an=t["an"] - 1).rename(columns={"activite": "activite_t1"})
+    e = t.merge(t1, on=["fi", "an"], how="inner")
+    e["evolution"] = e["activite_t1"] / e["activite"] - 1
+    return e.rename(columns={"activite": "activite_t"})
 
 
 def mesures(panel):
@@ -90,6 +113,39 @@ def main():
     comparaison.T.rename(columns={0: "valeur"}).to_csv(tableaux / "mesures_comparees.csv")
     print("\n3-4. Ce que chaque mesure ignore, et sensibilité au poids p (toutes années) :")
     print(comparaison.T.rename(columns={0: "valeur"}).to_string())
+
+    # --- Question 2 : seuil des petits établissements ---------------------------
+    panel["activite"] = calculer_activite(panel, config)
+    actifs = panel[panel["activite"] > 0]
+    total = actifs.groupby("an")["activite"].sum()
+    lignes = []
+    for seuil in SEUILS_CANDIDATS:
+        sous = actifs[actifs["activite"] < seuil]
+        for an in sorted(actifs["an"].unique()):
+            s_an = sous[sous["an"] == an]
+            lignes.append({"seuil": seuil, "an": an, "etablissements_actifs": int((actifs["an"] == an).sum()),
+                           "ecartes": len(s_an),
+                           "part_activite_ecartee_pct": 100 * s_an["activite"].sum() / total[an]})
+    seuils = pd.DataFrame(lignes)
+    seuils.round(4).to_csv(tableaux / "seuil_petits_etablissements.csv", index=False)
+    print("\n5. Seuil des petits établissements (activité > 0 seulement), par seuil candidat :")
+    resume = seuils.groupby("seuil").agg(ecartes_min=("ecartes", "min"), ecartes_max=("ecartes", "max"),
+                                         part_activite_max_pct=("part_activite_ecartee_pct", "max"))
+    print(resume.round(4).to_string())
+    print(f"   (activité nulle : {int((panel['activite'] == 0).sum())} lignes, "
+          f"inconnue : {int(panel['activite'].isna().sum())} lignes, écartées quel que soit le seuil)")
+
+    e = evolutions(panel)
+    e["tranche"] = pd.cut(e["activite_t"], TRANCHES, right=False)
+    instab = e.groupby("tranche", observed=True)["evolution"].agg(
+        lignes="size",
+        q1=lambda x: x.quantile(0.25), mediane="median", q3=lambda x: x.quantile(0.75),
+        part_plus_de_50pct=lambda x: 100 * (x.abs() > 0.5).mean())
+    instab["ecart_interquartile_points"] = 100 * (instab["q3"] - instab["q1"])
+    instab = instab[["lignes", "ecart_interquartile_points", "part_plus_de_50pct"]]
+    instab.round(2).to_csv(tableaux / "instabilite_par_taille.csv")
+    print("\n6. Instabilité des évolutions d'une année sur l'autre, par tranche d'activité en t :")
+    print(instab.round(1).to_string())
 
     print(f"\nTableaux écrits dans {tableaux.relative_to(racine_projet())}")
 

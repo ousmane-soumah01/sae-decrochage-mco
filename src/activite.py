@@ -8,6 +8,9 @@ Une venue de partielle dure une journée ; un séjour de complète de 0 jour com
 
 Exemple : 100 000 journées, 40 000 venues, 8 000 séjours de 0 jour
           -> 100 000 + 0,5 x (40 000 + 8 000) = 124 000 journées-équivalentes.
+
+Un établissement n'entre dans l'étude que si son activité atteint le seuil des
+petits établissements (config.yaml : perimetre.seuil_petits_etablissements).
 """
 
 import pandas as pd
@@ -29,3 +32,7 @@ def calculer_activite(table, config):
                 + a["poids_sejours_0_jour"] * sejours_0.fillna(0))
     toutes_vides = pd.concat([journees, venues, sejours_0], axis=1).isna().all(axis=1)
     return activite.mask(toutes_vides)
+
+def est_eligible(activite, config):
+    """Vrai si l'activité atteint le seuil des petits établissements ; faux si elle est inconnue."""
+    return activite >= config["perimetre"]["seuil_petits_etablissements"]

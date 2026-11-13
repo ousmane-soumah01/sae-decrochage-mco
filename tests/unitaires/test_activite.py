@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from src.activite import calculer_activite
+from src.activite import calculer_activite, est_eligible
 from src.config import charger_config
 
 pytestmark = pytest.mark.unitaire
@@ -41,3 +41,7 @@ def test_calculer_activite_suit_le_poids_de_config(config):
     config["activite"]["poids_partielle"] = 1.0           # variante de robustesse
     t = pd.DataFrame({"jou_mco": [100.0], "sejhp_mco": [50.0], "sej0_mco": [0.0]})
     assert calculer_activite(t, config).tolist() == [150.0]
+
+def test_est_eligible_seuil_1000(config):
+    activite = pd.Series([124_000, 1000, 999.5, 325, None])
+    assert est_eligible(activite, config).tolist() == [True, True, False, False, False]
