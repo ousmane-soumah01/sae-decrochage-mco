@@ -79,3 +79,16 @@ def chemin_donnees(config, cle):
     if cle not in config["donnees"]:
         raise KeyError(f"donnees.{cle} n'existe pas dans config.yaml.")
     return racine_projet() / config["donnees"][cle]
+
+
+def encodage_de_l_annee(config, annee):
+    """Encodage des CSV de la SAE pour une année, tel que déclaré dans config.yaml.
+
+    donnees.encodage_csv avant donnees.encodage_csv_utf8_a_partir_de, UTF-8 à partir
+    de cette année. Ces valeurs sont démontrées fichier par fichier par
+    scripts/01_extraire.py (src.qualite.encodages_valides).
+    """
+    donnees = config["donnees"]
+    if annee >= donnees["encodage_csv_utf8_a_partir_de"]:
+        return "utf-8"
+    return donnees["encodage_csv"]

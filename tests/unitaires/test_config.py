@@ -5,7 +5,13 @@ import copy
 import pytest
 import yaml
 
-from src.config import charger_config, chemin_donnees, racine_projet, verifier_config
+from src.config import (
+    charger_config,
+    chemin_donnees,
+    encodage_de_l_annee,
+    racine_projet,
+    verifier_config,
+)
 
 pytestmark = pytest.mark.unitaire
 
@@ -102,3 +108,11 @@ def test_chemin_donnees_renvoie_un_chemin_sous_la_racine(config):
 def test_chemin_donnees_signale_une_cle_inconnue(config):
     with pytest.raises(KeyError):
         chemin_donnees(config, "dossier_inexistant")
+
+
+# --- encodage_de_l_annee ---
+
+@pytest.mark.parametrize("annee,encodage", [(2013, "cp1252"), (2024, "cp1252"), (2025, "utf-8")])
+def test_encodage_de_l_annee_applique_la_configuration(config, annee, encodage):
+    # La configuration minimale déclare cp1252, puis UTF-8 à partir de 2025.
+    assert encodage_de_l_annee(config, annee) == encodage
