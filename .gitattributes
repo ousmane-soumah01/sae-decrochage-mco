@@ -1,0 +1,9 @@
+# Fins de ligne identiques pour tous (Windows, Mac, Linux) :
+# les fichiers texte sont enregistrés dans le dépôt avec des fins de ligne Unix (LF).
+* text=auto eol=lf
+
+# Fichiers binaires : jamais modifiés par git
+*.png binary
+*.parquet binary
+*.7z binary
+*.pdf binary

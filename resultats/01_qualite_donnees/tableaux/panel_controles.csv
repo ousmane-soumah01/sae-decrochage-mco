@@ -1,0 +1,71 @@
+etape,mesure,valeur
+mco,lignes,20974
+conversion,lit_med : valeurs non numériques,0
+conversion,lit_chi : valeurs non numériques,0
+conversion,lit_obs : valeurs non numériques,0
+conversion,lit_mco : valeurs non numériques,0
+conversion,jli_med : valeurs non numériques,0
+conversion,jli_chi : valeurs non numériques,0
+conversion,jli_obs : valeurs non numériques,0
+conversion,jli_mco : valeurs non numériques,0
+conversion,jou_med : valeurs non numériques,0
+conversion,jou_chi : valeurs non numériques,0
+conversion,jou_obs : valeurs non numériques,0
+conversion,jou_mco : valeurs non numériques,0
+conversion,sejhc_med : valeurs non numériques,0
+conversion,sejhc_chi : valeurs non numériques,0
+conversion,sejhc_obs : valeurs non numériques,0
+conversion,sejhc_mco : valeurs non numériques,0
+conversion,sej0_med : valeurs non numériques,0
+conversion,sej0_chi : valeurs non numériques,0
+conversion,sej0_obs : valeurs non numériques,0
+conversion,sej0_mco : valeurs non numériques,0
+conversion,pla_med : valeurs non numériques,0
+conversion,pla_chi : valeurs non numériques,0
+conversion,pla_obs : valeurs non numériques,0
+conversion,pla_mco : valeurs non numériques,0
+conversion,sejhp_med : valeurs non numériques,0
+conversion,sejhp_chi : valeurs non numériques,0
+conversion,sejhp_obs : valeurs non numériques,0
+conversion,sejhp_mco : valeurs non numériques,0
+conversion,sea_mco : valeurs non numériques,0
+capacites,lit_med vide mis à 0,2595
+capacites,lit_med vide laissé vide (jou_med > 0),84
+capacites,jli_med vide mis à 0,2653
+capacites,jli_med vide laissé vide (jou_med > 0),134
+capacites,pla_med vide mis à 0,7311
+capacites,pla_med vide laissé vide (sejhp_med > 0),328
+capacites,lit_chi vide mis à 0,7855
+capacites,lit_chi vide laissé vide (jou_chi > 0),47
+capacites,jli_chi vide mis à 0,8128
+capacites,jli_chi vide laissé vide (jou_chi > 0),56
+capacites,pla_chi vide mis à 0,7852
+capacites,pla_chi vide laissé vide (sejhp_chi > 0),39
+capacites,lit_obs vide mis à 0,11855
+capacites,lit_obs vide laissé vide (jou_obs > 0),67
+capacites,jli_obs vide mis à 0,12356
+capacites,jli_obs vide laissé vide (jou_obs > 0),108
+capacites,pla_obs vide mis à 0,13600
+capacites,pla_obs vide laissé vide (sejhp_obs > 0),351
+capacites,lit_mco vide mis à 0,1673
+capacites,lit_mco vide laissé vide (jou_mco > 0),39
+capacites,jli_mco vide mis à 0,1696
+capacites,jli_mco vide laissé vide (jou_mco > 0),26
+capacites,pla_mco vide mis à 0,4518
+capacites,pla_mco vide laissé vide (sejhp_mco > 0),90
+incoherences,inc_lits_vides_avec_journees,39
+incoherences,inc_places_vides_avec_venues,90
+incoherences,inc_sej0_superieur_a_sejhc,2
+incoherences,inc_jou_trop_bas,7
+incoherences,inc_lits_zero_avec_journees,116
+identite,départements,102
+identite,régions actuelles,19
+jointures,lignes MCO absentes de ID,0
+indicateurs,a_pediatrie = 1,4055
+indicateurs,a_geriatrie = 1,6211
+indicateurs,a_unv = 1,1854
+indicateurs,a_urgences = 1,8145
+indicateurs,a_smr = 1,10359
+indicateurs,lignes SSR_TOT sans séjour en complète (non comptées),1129
+panel,lignes,20974
+panel,colonnes,47

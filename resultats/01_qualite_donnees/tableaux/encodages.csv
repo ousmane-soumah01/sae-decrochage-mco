@@ -1,0 +1,92 @@
+annee,table,fichier,encodages_valides,valides_a_quelques_octets_pres,encodage_config,conforme
+2013,ID,ID_2013r.csv,cp1252,,cp1252,True
+2013,MCO,MCO_2013r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2013,MCOPED,MCOPED_2013a.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2013,MCOGER,MCOGER_2013r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2013,MCOAVC,MCOAVC_2013a.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2013,URGENCES,URGENCES_2013r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2013,SSR,SSR_2013r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2014,ID,ID_2014r.csv,cp1252,,cp1252,True
+2014,MCO,MCO_2014r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2014,MCOPED,MCOPED_2014r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2014,MCOGER,MCOGER_2014r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2014,MCOAVC,MCOAVC_2014a.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2014,URGENCES,URGENCES_2014r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2014,SSR,SSR_2014r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2015,ID,ID_2015r.csv,,cp1252,cp1252,True
+2015,MCO,MCO_2015r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2015,MCOPED,MCOPED_2015r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2015,MCOGER,MCOGER_2015r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2015,MCOAVC,MCOAVC_2015a.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2015,URGENCES,URGENCES_2015r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2015,SSR,SSR_2015r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2016,ID,ID_2016r.csv,cp1252,,cp1252,True
+2016,MCO,MCO_2016r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2016,MCOPED,MCOPED_2016r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2016,MCOGER,MCOGER_2016r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2016,MCOAVC,MCOAVC_2016a.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2016,URGENCES,URGENCES_2016r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2016,SSR,SSR_2016r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2017,ID,ID_2017r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2017,MCO,MCO_2017r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2017,MCOPED,MCOPED_2017a.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2017,MCOGER,MCOGER_2017r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2017,MCOAVC,MCOAVC_2017a.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2017,URGENCES,URGENCES_2017r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2017,SSR,SSR_2017r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2018,ID,ID_2018r.csv,cp1252,,cp1252,True
+2018,MCO,MCO_2018r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2018,MCOPED,MCOPED_2018a.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2018,MCOGER,MCOGER_2018r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2018,MCOAVC,MCOAVC_2018a.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2018,URGENCES,URGENCES_2018r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2018,SSR,SSR_2018r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2019,ID,ID_2019r.csv,cp1252,,cp1252,True
+2019,MCO,MCO_2019r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2019,MCOPED,MCOPED_2019a.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2019,MCOGER,MCOGER_2019r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2019,MCOAVC,MCOAVC_2019a.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2019,URGENCES,URGENCES_2019r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2019,SSR,SSR_2019r.csv,utf-8 cp1252 latin-1 iso8859_15 cp850 mac_roman,,cp1252,True
+2020,ID,ID_2020r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2020,MCO,MCO_2020r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2020,MCOPED,MCOPED_2020a.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2020,MCOGER,MCOGER_2020r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2020,MCOAVC,MCOAVC_2020a.csv,cp1252 latin-1 iso8859_15 mac_roman,,cp1252,True
+2020,URGENCES,URGENCES_2020r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2020,SSR,SSR_2020r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2021,ID,ID_2021r.csv,cp1252,,cp1252,True
+2021,MCO,MCO_2021r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2021,MCOPED,MCOPED_2021a.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2021,MCOGER,MCOGER_2021r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2021,MCOAVC,MCOAVC_2021a.csv,cp1252 latin-1 iso8859_15 mac_roman,,cp1252,True
+2021,URGENCES,URGENCES_2021r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2021,SSR,SSR_2021r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2022,ID,ID_2022r.csv,cp1252,,cp1252,True
+2022,MCO,MCO_2022r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2022,MCOPED,MCOPED_2022a.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2022,MCOGER,MCOGER_2022r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2022,MCOAVC,MCOAVC_2022a.csv,cp1252 latin-1 iso8859_15 mac_roman,,cp1252,True
+2022,URGENCES,URGENCES_2022r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2022,SSR,SSR_2022r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2023,ID,ID_2023r.csv,cp1252,,cp1252,True
+2023,MCO,MCO_2023r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2023,MCOPED,MCOPED_2023r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2023,MCOGER,MCOGER_2023r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2023,MCOAVC,MCOAVC_2023r.csv,cp1252 latin-1 iso8859_15 mac_roman,,cp1252,True
+2023,URGENCES,URGENCES_2023r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2023,SSR,SSR_2023r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2024,ID,ID_2024r.csv,cp1252,,cp1252,True
+2024,MCO,MCO_2024r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2024,MCOPED,MCOPED_2024r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2024,MCOGER,MCOGER_2024r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2024,MCOAVC,MCOAVC_2024r.csv,cp1252 latin-1 iso8859_15 mac_roman,,cp1252,True
+2024,URGENCES,URGENCES_2024r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2024,SSR,SSR_2024r.csv,cp1252 latin-1 iso8859_15,,cp1252,True
+2025,ID,ID_2025r.csv,utf-8,,utf-8,True
+2025,MCO,MCO_2025r.csv,utf-8,,utf-8,True
+2025,MCOPED,MCOPED_2025r.csv,utf-8,,utf-8,True
+2025,MCOGER,MCOGER_2025r.csv,utf-8,,utf-8,True
+2025,MCOAVC,MCOAVC_2025r.csv,utf-8,,utf-8,True
+2025,URGENCES,URGENCES_2025r.csv,utf-8,,utf-8,True
+2025,SMR,SMR_2025r.csv,utf-8,,utf-8,True
