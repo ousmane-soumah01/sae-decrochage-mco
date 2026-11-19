@@ -41,6 +41,7 @@ CONFIG_MINIMALE = {
     "perimetre": {"seuil_petits_etablissements": 1000},
     "cible": {"reference": "moyenne_ponderee", "ecart_points": 15, "sortie_est_un_decrochage": True,
               "compensation_min": 0.5, "retirer_restructurations": True},
+    "decoupage": {"passages_exclus": [2019, 2020], "annees_test": [2023, 2024], "annees_min_entrainement": 1},
 }
 
 
@@ -110,6 +111,8 @@ def test_charger_config_lit_le_vrai_config_du_projet():
     assert config["activite"]["poids_partielle"] == 0.5
     assert config["perimetre"]["seuil_petits_etablissements"] == 1000
     assert config["cible"]["ecart_points"] == 15
+    assert config["decoupage"]["annees_test"] == [2023, 2024]
+    assert config["decoupage"]["passages_exclus"] == [2019, 2020]
 
 
 # --- chemin_donnees ---
@@ -161,4 +164,29 @@ def test_verifier_config_refuse_un_ecart_nul(config):
 def test_verifier_config_refuse_une_compensation_hors_de_0_1(config, valeur):
     config["cible"]["compensation_min"] = valeur
     with pytest.raises(ValueError, match="compensation_min"):
+        verifier_config(config)
+
+
+# --- decoupage ---
+
+@pytest.mark.parametrize("cle, annees", [("annees_test", [2025]), ("passages_exclus", [2012])])
+def test_verifier_config_refuse_une_annee_de_decoupage_hors_periode(config, cle, annees):
+    # 2025 n'a pas d'année suivante : ce n'est pas une année t possible
+    config["decoupage"][cle] = annees
+    with pytest.raises(ValueError, match=cle):
+        verifier_config(config)
+
+def test_verifier_config_refuse_une_annee_exclue_et_au_test(config):
+    config["decoupage"]["annees_test"] = [2020, 2024]
+    with pytest.raises(ValueError, match="2020"):
+        verifier_config(config)
+
+def test_verifier_config_refuse_un_test_vide(config):
+    config["decoupage"]["annees_test"] = []
+    with pytest.raises(ValueError, match="annees_test"):
+        verifier_config(config)
+
+def test_verifier_config_refuse_zero_annee_d_entrainement(config):
+    config["decoupage"]["annees_min_entrainement"] = 0
+    with pytest.raises(ValueError, match="annees_min_entrainement"):
         verifier_config(config)

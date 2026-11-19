@@ -1,0 +1,15 @@
+methode,pli,entrainement,lignes_entrainement,validation,meme_annee_des_deux_cotes,avenir_dans_l_entrainement
+TimeSeriesSplit,1,2013-2013,1456,64 de 2013 + 1389 de 2014,True,False
+TimeSeriesSplit,2,2013-2014,2909,88 de 2014 + 1365 de 2015,True,False
+TimeSeriesSplit,3,2013-2015,4362,97 de 2015 + 1356 de 2016,True,False
+TimeSeriesSplit,4,2013-2016,5815,103 de 2016 + 1350 de 2017,True,False
+TimeSeriesSplit,5,2013-2017,7268,100 de 2017 + 1353 de 2018,True,False
+TimeSeriesSplit,6,2013-2018,8721,93 de 2018 + 1360 de 2021,True,False
+TimeSeriesSplit,7,2013-2021,10174,52 de 2021 + 1401 de 2022,True,False
+plis_par_annee,1,2013-2013,1520,1477 de 2014,False,False
+plis_par_annee,2,2013-2014,2997,1462 de 2015,False,False
+plis_par_annee,3,2013-2015,4459,1459 de 2016,False,False
+plis_par_annee,4,2013-2016,5918,1450 de 2017,False,False
+plis_par_annee,5,2013-2017,7368,1446 de 2018,False,False
+plis_par_annee,6,2013-2018,8814,1412 de 2021,False,False
+plis_par_annee,7,2013-2021,10226,1401 de 2022,False,False

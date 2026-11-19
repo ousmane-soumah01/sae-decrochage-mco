@@ -4,10 +4,21 @@ construire_panel() enchaîne plusieurs modules : elle sera testée de bout en bo
 dans tests/integration/test_chaine_preparation.py.
 """
 
+import numpy as np
 import pandas as pd
 import pytest
 
-from src.variables import CAPACITES, INDICATEURS, QUANTITES_MCO, indicateur
+from src.variables import (
+    CAPACITES,
+    CATEGORIELLES,
+    INDICATEURS,
+    QUANTITES_MCO,
+    VARIABLES_INTERDITES,
+    indicateur,
+    ratio,
+    variables_explicatives,
+    verifier_sans_fuite,
+)
 
 pytestmark = pytest.mark.unitaire
 
@@ -38,3 +49,58 @@ def test_indicateur_smr_exige_des_sejours_en_complete():
     t = pd.DataFrame({"gde": ["SSR_TOT", "SSR_TOT", "SSR_A50", "SSR_TOT"],
                       "sejhc": ["40", "0", "40", None]})
     assert condition(t).tolist() == [True, False, False, False]
+
+
+# --- Variables explicatives ---
+
+def test_ratio_vide_quand_le_denominateur_est_nul_ou_vide():
+    r = ratio(pd.Series([10.0, 10.0, 10.0]), pd.Series([4.0, 0.0, np.nan]))
+    assert r.iloc[0] == 2.5 and r.iloc[1:].isna().all()
+
+
+def panel_trois_sites():
+    """Trois sites en 2020 : A et B dans l'entité E1, C seul dans E2 (sans journées exploitables)."""
+    p = pd.DataFrame({c: 0.0 for c in QUANTITES_MCO}, index=range(3))
+    p["fi"], p["an"], p["fi_ej"] = ["A", "B", "C"], 2020, ["E1", "E1", "E2"]
+    p["jou_mco"], p["jli_mco"] = [800.0, 300.0, 1000.0], [1000.0, 600.0, 0.0]
+    p["jou_med"], p["jou_chi"], p["jou_obs"] = [400.0, 300.0, 1000.0], [400.0, 0.0, 0.0], [0.0, 0.0, 0.0]
+    p["sejhc_mco"], p["sej0_mco"], p["sejhp_mco"] = [120.0, 60.0, 100.0], [20.0, 10.0, 0.0], [400.0, 0.0, 0.0]
+    p["activite"] = p["jou_mco"] + 0.5 * (p["sejhp_mco"] + p["sej0_mco"])   # 1010, 305, 1000
+    p["stjr"], p["catr"], p["reg_actuelle"] = ["1", "1", "2"], ["PUB2", "PUB2", "PLU4"], ["76", "76", "11"]
+    for nom in INDICATEURS:
+        p[nom] = 0
+    p["inc_jou_trop_bas"] = 0
+    p["rs"] = ["a", "b", "c"]
+    return p
+
+
+def test_variables_explicatives_ratios_calcules_a_la_main():
+    v = variables_explicatives(panel_trois_sites()).set_index("fi")
+    assert v.loc["A", "taux_occupation_mco"] == 0.8                 # 800 / 1000
+    assert np.isnan(v.loc["C", "taux_occupation_mco"])              # 0 journée exploitable : vide
+    assert v.loc["A", "part_partielle_mco"] == 400 / 520            # 400 venues / (120 + 400) séjours
+    assert v.loc["A", "duree_moyenne_sejour_mco"] == 8.0            # 800 / (120 - 20)
+    assert v.loc["A", "part_journees_med"] == 0.5 and v.loc["C", "part_journees_med"] == 1.0
+    assert v.loc["A", "log_activite"] == pytest.approx(np.log(1011))
+
+
+def test_variables_explicatives_place_dans_l_entite():
+    v = variables_explicatives(panel_trois_sites()).set_index("fi")
+    assert v["sites_entite"].to_dict() == {"A": 2, "B": 2, "C": 1}
+    assert v.loc["A", "part_site_dans_entite"] == pytest.approx(1010 / 1315)
+    assert v.loc["C", "part_site_dans_entite"] == 1.0
+
+
+def test_variables_explicatives_garde_les_categorielles_en_texte_et_sans_fuite():
+    v = variables_explicatives(panel_trois_sites())
+    assert v["catr"].tolist() == ["PUB2", "PUB2", "PLU4"]
+    assert set(CATEGORIELLES) <= set(v.columns)
+    assert "rs" not in v.columns and "fi_ej" not in v.columns
+    verifier_sans_fuite([c for c in v.columns if c not in ("fi", "an")])   # ne lève rien
+
+
+@pytest.mark.parametrize("colonne", ["activite_t1", "restructuration_probable", "changement_de_groupe", "fi_ej"])
+def test_verifier_sans_fuite_refuse_une_colonne_interdite(colonne):
+    assert colonne in VARIABLES_INTERDITES
+    with pytest.raises(ValueError, match=colonne):
+        verifier_sans_fuite(["jou_mco", colonne])
