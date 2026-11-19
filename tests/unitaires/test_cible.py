@@ -12,6 +12,7 @@ import pytest
 from src.cible import (
     citations_fusion_scission,
     classer,
+    reprises_de_capacites,
     construire_passages,
     ecarts_et_decrochages,
     reference_ponderee,
@@ -173,3 +174,68 @@ def test_changement_de_groupe(config):
     panel = pd.DataFrame({"fi": ["Z", "Z"], "an": [2023, 2024], "fi_ej": ["E1", "E2"],
                           "activite": [5_000.0, 5_000.0]})
     assert avec_restructurations(panel, config).loc["Z", "changement_de_groupe"] == 1
+
+
+# --- reprise des capacités par un autre site --------------------------------------------
+
+def panel_reprise(lignes_en_plus=()):
+    """A (entité EA, département 01) : 100 lits en 2023, absent en 2024. N (entité EN, 01), nouveau en
+    2024 : 98 lits, 9 000 journées. H : grand site stable qui fixe la référence à 0."""
+    lignes = [("A", 2023, "EA", "01", 10_000.0, 100.0), ("N", 2024, "EN", "01", 9_000.0, 98.0),
+              ("H", 2023, "EH", "02", 100_000.0, 400.0), ("H", 2024, "EH", "02", 100_000.0, 400.0),
+              *lignes_en_plus]
+    p = pd.DataFrame(lignes, columns=["fi", "an", "fi_ej", "dep", "activite", "lit_mco"])
+    p["pla_mco"] = 0.0
+    return p
+
+
+def test_reprise_par_un_nouveau_site_d_une_autre_entite(config):
+    # 100 lits perdus, 98 repris (à 10 % près), même département, 9 000 journées sur 10 000 reprises.
+    c = avec_restructurations(panel_reprise(), config)
+    assert c.loc["A", "classe"] == "sortie"
+    assert c.loc["A", "compensation"] == 0 or pd.isna(c.loc["A", "compensation"])   # A seul dans son entité
+    assert c.loc["A", "reprise_capacites"] == 1 and c.loc["A", "reprise_meme_ej"] == 0
+    assert c.loc["A", "restructuration_probable"] == 1
+
+
+def test_reprise_dans_la_meme_entite(config):
+    p = panel_reprise()
+    p.loc[p.fi == "N", "fi_ej"] = "EA"
+    assert avec_restructurations(p, config).loc["A", "reprise_meme_ej"] == 1
+
+
+@pytest.mark.parametrize("modifier, raison", [
+    (lambda p: p.assign(dep=p.dep.where(p.fi != "N", "03")), "autre département"),
+    (lambda p: p.assign(lit_mco=p.lit_mco.where(p.fi != "N", 70.0)), "gain trop différent de la perte"),
+    (lambda p: p.assign(activite=p.activite.where(p.fi != "N", 4_000.0)), "activité pas reprise"),
+    (lambda p: p.assign(lit_mco=p.lit_mco.where(p.fi != "A", 25.0)).assign(
+        lit_mco=lambda q: q.lit_mco.where(q.fi != "N", 25.0)), "perte sous 30 lits et places"),
+])
+def test_pas_de_reprise(config, modifier, raison):
+    c = avec_restructurations(modifier(panel_reprise()), config)
+    assert c.loc["A", "reprise_capacites"] == 0, raison
+    assert c.loc["A", "restructuration_probable"] == 0, raison
+
+
+def test_pas_de_reprise_quand_l_ancien_site_garde_des_lits(config):
+    # A passe de 100 à 40 lits (et de 10 000 à 3 000 journées) ; N gagne 60 lits : A est toujours là, il décroche.
+    p = panel_reprise([("A", 2024, "EA", "01", 3_000.0, 40.0)])
+    p.loc[p.fi == "N", "lit_mco"] = 60.0
+    c = avec_restructurations(p, config)
+    assert c.loc["A", "classe"] == "decrochage"
+    assert c.loc["A", "reprise_capacites"] == 0 and c.loc["A", "restructuration_probable"] == 0
+
+
+def test_pas_de_reprise_quand_trop_de_candidats(config):
+    # 7 sites gagnent aussi 100 lits ailleurs en France : 8 candidats > 6, la correspondance peut être le hasard.
+    autres = [(f"Z{i}", 2024, f"EZ{i}", "50", 9_000.0, 100.0) for i in range(7)]
+    assert avec_restructurations(panel_reprise(autres), config).loc["A", "reprise_capacites"] == 0
+
+
+def test_reprise_desactivee_ou_sans_capacites(config):
+    config["cible"]["reprise"]["active"] = False
+    assert avec_restructurations(panel_reprise(), config).loc["A", "reprise_capacites"] == 0
+    config["cible"]["reprise"]["active"] = True
+    sans_lits = panel_reprise().drop(columns=["lit_mco", "pla_mco"])
+    classes = classer(construire_passages(sans_lits, config), sans_lits, config)
+    assert reprises_de_capacites(classes, sans_lits, config).empty

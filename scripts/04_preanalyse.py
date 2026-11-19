@@ -56,6 +56,9 @@ Question 6 : comment découper les années pour apprendre, valider et tester ?
     des lits dans la discipline (mécanisme d'absence) ;
   - figure covid_et_test.png.
 
+Les questions 6 et 7 comptent les restructurations probables sans la reprise des capacités
+(cible.reprise), décidée après la question 7 : la cible telle qu'elle était à ces décisions.
+
 Question 7 : les sorties et les décrochages restants cachent-ils des mouvements de structure ?
 (passages dont la cible est connue ; « déjà repéré » = restructuration probable de la question 5)
   - mouvements_declares.csv : part des lignes qui portent chaque mouvement déclaré dans la
@@ -66,9 +69,12 @@ Question 7 : les sorties et les décrochages restants cachent-ils des mouvements
     capacité en t+1, avec une hausse d'activité, et au plus 6 sites candidats en France ;
     même test avec les gains de t-1 -> t (placebo : ils ne peuvent pas venir de cette perte) ;
   - reprises_trouvees.csv : chaque passage y = 1 avec une reprise, son repreneur, et si le
-    repreneur est dans la même entité juridique (transfert ou regroupement interne) ou non.
+    repreneur est dans la même entité juridique (transfert ou regroupement interne) ou non ;
+    capacité de l'ancien site en t+1 et années où il est encore dans la SAE après t (un site
+    qui garde des lits n'a pas disparu : la règle retenue exige qu'il perde toutes ses capacités).
 """
 
+import copy
 import sys
 from pathlib import Path
 
@@ -440,8 +446,16 @@ def main():
           f"{figures.relative_to(racine_projet())}")
 
 
+def sans_reprise(config):
+    """Copie de la configuration sans la reprise des capacités (décidée après la question 7)."""
+    copie = copy.deepcopy(config)
+    copie["cible"]["reprise"]["active"] = False
+    return copie
+
+
 def question_6(panel, config, tableaux, figures):
     """Question 6 : passages Covid, années de test, plis de validation et cases vides."""
+    config = sans_reprise(config)
     annees = range(config["donnees"]["annee_debut"], config["donnees"]["annee_fin"] + 1)
     identite = empiler_table(config, "ID", annees, chemin_donnees(config, "dossier_extraites"))
     classes = restructurations(classer(construire_passages(panel, config), panel, config),
@@ -653,7 +667,8 @@ def reprises(c, capacites, seuil):
         perte_activite = max(a["activite"] - (0.0 if pd.isna(act1) else act1), 0.0)
         if perte < seuil or perte < PART_PERTE_MIN * a["cap"]:
             continue
-        ligne = {"fi": r.fi, "t": t, "perte": perte, "fi_ej": a["fi_ej"]}
+        ligne = {"fi": r.fi, "t": t, "perte": perte, "fi_ej": a["fi_ej"],
+                 "capacite_t1": 0.0 if pd.isna(cap1) else cap1}
         for nom, annee in [("reprise", t + 1), ("placebo", t)]:
             g = gains.get(annee)
             if g is None:
@@ -671,6 +686,7 @@ def reprises(c, capacites, seuil):
 
 def question_7(panel, config, tableaux):
     """Question 7 : mouvements déclarés dans la table ID et reprise des capacités par un autre site."""
+    config = sans_reprise(config)
     annees = range(config["donnees"]["annee_debut"], config["donnees"]["annee_fin"] + 1)
     identite = empiler_table(config, "ID", annees, chemin_donnees(config, "dossier_extraites"))
     c = restructurations(classer(construire_passages(panel, config), panel, config), panel, identite, config)
@@ -714,11 +730,15 @@ def question_7(panel, config, tableaux):
     # 21. Reprises trouvées (y = 1), au plus grand seuil
     ident = identite.assign(an=identite["an"].astype(int)).drop_duplicates(["fi", "an"]).set_index(["fi", "an"])
     seuil = max(SEUILS_REPRISE_CANDIDATS)
+    presence = ident.reset_index().groupby("fi")["an"].apply(sorted).to_dict()
     lignes = []
     for r in trouvees[seuil][trouvees[seuil]["classe"] != "stable"].itertuples():
         for x in r.repreneurs.itertuples():
             lignes.append({"fi": r.fi, "t": r.t, "partie": r.partie, "classe": r.classe,
-                           "deja_repere": r.restructuration_probable, "perte": r.perte, "repreneur": x.fi,
+                           "deja_repere": r.restructuration_probable, "perte": r.perte,
+                           "capacite_t1": r.capacite_t1,
+                           "annees_dans_la_sae_apres_t": ",".join(str(a) for a in presence.get(r.fi, []) if a > r.t),
+                           "repreneur": x.fi,
                            "gain": x.gain, "nouveau_finess": x.nouveau_finess,
                            "meme_entite_juridique": x.fi_ej == r.fi_ej or x.fi_ej_avant == r.fi_ej,
                            "fipre_repreneur": ident["fipre"].get((x.fi, r.t + 1)),
@@ -730,6 +750,8 @@ def question_7(panel, config, tableaux):
     print(f"\n21. Passages y = 1 avec une reprise (seuil {seuil}) : {len(u)}, dont {len(nouveaux)} pas encore "
           f"repérés. Repreneur dans la même entité juridique : {int(nouveaux['meme_entite_juridique'].sum())} "
           f"sur {len(nouveaux)} nouveaux, {int(deja['meme_entite_juridique'].sum())} sur {len(deja)} déjà repérés")
+    print(f"    Anciens sites qui gardent des lits ou des places en t+1 : "
+          f"{int((nouveaux['capacite_t1'] > 0).sum())} sur {len(nouveaux)} nouveaux")
     print(trouvees_y1.to_string(index=False))
 
 

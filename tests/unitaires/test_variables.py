@@ -99,7 +99,8 @@ def test_variables_explicatives_garde_les_categorielles_en_texte_et_sans_fuite()
     verifier_sans_fuite([c for c in v.columns if c not in ("fi", "an")])   # ne lève rien
 
 
-@pytest.mark.parametrize("colonne", ["activite_t1", "restructuration_probable", "changement_de_groupe", "fi_ej"])
+@pytest.mark.parametrize("colonne", ["activite_t1", "restructuration_probable", "changement_de_groupe", "fi_ej",
+                                     "reprise_capacites", "reprise_meme_ej"])
 def test_verifier_sans_fuite_refuse_une_colonne_interdite(colonne):
     assert colonne in VARIABLES_INTERDITES
     with pytest.raises(ValueError, match=colonne):

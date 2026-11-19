@@ -40,7 +40,9 @@ CONFIG_MINIMALE = {
     },
     "perimetre": {"seuil_petits_etablissements": 1000},
     "cible": {"reference": "moyenne_ponderee", "ecart_points": 15, "sortie_est_un_decrochage": True,
-              "compensation_min": 0.5, "retirer_restructurations": True},
+              "compensation_min": 0.5, "retirer_restructurations": True,
+              "reprise": {"active": True, "perte_min": 30, "part_perte_min": 1.0, "tolerance_absolue": 2,
+                          "tolerance_relative": 0.1, "candidats_max": 6, "part_activite_min": 0.5}},
     "decoupage": {"passages_exclus": [2019, 2020], "annees_test": [2023, 2024], "annees_min_entrainement": 1},
 }
 
@@ -164,6 +166,19 @@ def test_verifier_config_refuse_un_ecart_nul(config):
 def test_verifier_config_refuse_une_compensation_hors_de_0_1(config, valeur):
     config["cible"]["compensation_min"] = valeur
     with pytest.raises(ValueError, match="compensation_min"):
+        verifier_config(config)
+
+
+def test_verifier_config_refuse_une_cle_de_reprise_manquante(config):
+    del config["cible"]["reprise"]["candidats_max"]
+    with pytest.raises(ValueError, match="candidats_max"):
+        verifier_config(config)
+
+@pytest.mark.parametrize("cle, valeur", [("part_perte_min", 1.5), ("part_activite_min", -0.1),
+                                         ("perte_min", 0), ("candidats_max", 0)])
+def test_verifier_config_refuse_une_reprise_hors_bornes(config, cle, valeur):
+    config["cible"]["reprise"][cle] = valeur
+    with pytest.raises(ValueError, match="reprise"):
         verifier_config(config)
 
 
