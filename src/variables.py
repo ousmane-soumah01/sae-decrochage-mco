@@ -10,7 +10,13 @@
   6. indicateurs 0/1 tirés des autres tables (pédiatrie, gériatrie, unité neurovasculaire,
      urgences, SMR) : 1 si l'établissement y a la ligne demandée, 0 sinon (décision 5).
 Décisions : docs/nettoyage_donnees.md.
+
+Puis les variables explicatives de la table de modélisation (variables_explicatives) :
+seulement ce qui est connu en t, jamais ce qui vient de t+1 (VARIABLES_INTERDITES).
 """
+
+import numpy as np
+import pandas as pd
 
 from src.chargement import empiler_table
 from src.nettoyage import (
@@ -126,3 +132,58 @@ def construire_panel(config, dossier_extraites, annees):
     noter("panel", "lignes", len(mco))
     noter("panel", "colonnes", mco.shape[1])
     return mco, controles
+
+
+# --- Variables explicatives de la table de modélisation ---------------------------------
+
+# Colonnes qui ne doivent jamais servir à prédire : identifiants, et tout ce qui vient de t+1
+# (src/cible.py) ou qui sert à construire la cible.
+VARIABLES_INTERDITES = [
+    "fi", "fi_ej", "rs", "an", "t", "t1", "y", "classe", "activite_t", "activite_t1", "fi_ej_t1",
+    "actif_t1", "evolution", "reference", "ecart_points", "decrochage", "reapparu_plus_tard",
+    "compensation", "cite_fusion_scission", "restructuration_probable", "changement_de_groupe",
+]
+
+# Variables catégorielles : gardées en texte dans la table, encodées en 0/1 dans chaque modèle.
+CATEGORIELLES = ["stjr", "catr", "reg_actuelle"]
+
+
+def ratio(numerateur, denominateur):
+    """numerateur / denominateur, vide quand le dénominateur est nul ou vide."""
+    denominateur = denominateur.where(denominateur > 0)
+    return numerateur / denominateur
+
+
+def variables_explicatives(panel):
+    """Variables connues en t, une ligne par (fi, an) du panel.
+
+    panel : sortie de construire_panel avec la colonne activite (src.activite.calculer_activite).
+    Renvoie fi, an et : les 29 quantités, l'activité et son logarithme, les ratios, la place du
+    site dans son entité juridique (sites actifs en t), l'identité (texte) et les indicateurs.
+    Un ratio dont le dénominateur est nul ou vide reste vide.
+    """
+    v = panel[CLE + QUANTITES_MCO + ["activite"]].copy()
+    v["log_activite"] = np.log1p(v["activite"])
+    v["taux_occupation_mco"] = ratio(panel["jou_mco"], panel["jli_mco"])
+    v["part_partielle_mco"] = ratio(panel["sejhp_mco"], panel["sejhc_mco"] + panel["sejhp_mco"])
+    v["duree_moyenne_sejour_mco"] = ratio(panel["jou_mco"], panel["sejhc_mco"] - panel["sej0_mco"])
+    for d in DISCIPLINES[:3]:
+        v[f"part_journees_{d}"] = ratio(panel[f"jou_{d}"], panel["jou_mco"])
+
+    actifs = panel[panel["activite"] > 0]
+    entite = actifs.groupby(["fi_ej", "an"]).agg(sites_entite=("fi", "size"),
+                                                 activite_entite=("activite", "sum")).reset_index()
+    groupe = panel[CLE + ["fi_ej"]].merge(entite, on=["fi_ej", "an"], how="left")
+    v["sites_entite"] = groupe["sites_entite"].fillna(0).astype(int).to_numpy()
+    v["part_site_dans_entite"] = ratio(panel["activite"], pd.Series(groupe["activite_entite"].to_numpy(),
+                                                                     index=panel.index))
+
+    autres = CATEGORIELLES + list(INDICATEURS) + [c for c in panel.columns if c.startswith("inc_")]
+    return pd.concat([v, panel[autres]], axis=1)
+
+
+def verifier_sans_fuite(colonnes):
+    """Arrête le programme si une colonne interdite (identifiant ou t+1) est parmi les variables."""
+    interdites = sorted(set(colonnes) & set(VARIABLES_INTERDITES))
+    if interdites:
+        raise ValueError(f"Variables interdites parmi les variables explicatives : {interdites}")
