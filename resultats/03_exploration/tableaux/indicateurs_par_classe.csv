@@ -1,0 +1,11 @@
+indicateur,lignes_a_1,stables,decrochages,sorties,y1_pct_si_1,y1_pct_si_0
+a_pediatrie,2492,2469,23,0,0.92,6.72
+a_geriatrie,3619,3534,79,6,2.35,6.89
+a_unv,1112,1106,4,2,0.54,6.0
+a_urgences,5007,4929,75,3,1.56,8.44
+a_smr,6003,5625,342,36,6.3,4.59
+inc_lits_vides_avec_journees,8,1,0,7,87.5,5.42
+inc_places_vides_avec_venues,29,20,3,6,31.03,5.41
+inc_sej0_superieur_a_sejhc,1,1,0,0,0.0,5.47
+inc_jou_trop_bas,1,0,1,0,100.0,5.47
+inc_lits_zero_avec_journees,28,3,7,18,89.29,5.27

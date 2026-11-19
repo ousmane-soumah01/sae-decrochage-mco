@@ -77,6 +77,7 @@ python scripts/03_panel.py           # panel : une ligne par établissement et p
 python scripts/04_preanalyse.py      # pré-analyse des règles de la cible et du découpage
 python scripts/05_table_modelisation.py  # table de modélisation : une ligne par passage évalué
 python scripts/06_dictionnaire.py    # dictionnaire des colonnes du panel
+python scripts/07_exploration.py     # exploration des variables, sur l'entraînement seulement
 python -m pytest                     # tests unitaires et d'intégration
 ```
 
@@ -92,6 +93,7 @@ flowchart LR
     D --> E["04 · Pré-analyse<br/>cible et découpage"]
     D --> F["06 · Dictionnaire<br/>des colonnes"]
     E --> G["05 · Table de modélisation<br/>passages évalués × variables en t"]
+    G --> H["07 · Exploration<br/>entraînement seulement"]
 ```
 
 ## Organisation du dépôt
