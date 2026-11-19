@@ -75,6 +75,7 @@ python scripts/01_extraire.py        # extrait les tables utiles, prouve l'encod
 python scripts/02_audit_qualite.py   # audit : colonnes, manquants, types, clés, cohérence
 python scripts/03_panel.py           # panel : une ligne par établissement et par année
 python scripts/04_preanalyse.py      # pré-analyse des règles de la cible et du découpage
+python scripts/05_table_modelisation.py  # table de modélisation : une ligne par passage évalué
 python scripts/06_dictionnaire.py    # dictionnaire des colonnes du panel
 python -m pytest                     # tests unitaires et d'intégration
 ```
@@ -90,6 +91,7 @@ flowchart LR
     C --> D["03 · Panel<br/>établissement × année"]
     D --> E["04 · Pré-analyse<br/>cible et découpage"]
     D --> F["06 · Dictionnaire<br/>des colonnes"]
+    E --> G["05 · Table de modélisation<br/>passages évalués × variables en t"]
 ```
 
 ## Organisation du dépôt
