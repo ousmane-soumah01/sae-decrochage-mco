@@ -11,7 +11,8 @@ Produit, dans resultats/03_exploration/ :
     ordonnées ; à peu près 0,8 x Spearman, donc un seuil plus bas pour le même lien) ;
   - tableaux/lien_cible.csv : chaque variable seule, son AUC (décrochages et sorties contre
     stables, puis chacun à part), sa corrélation de Kendall et de Spearman avec y, ses cases vides ;
-  - tableaux/modalites_categorielles.csv : lignes et y = 1 par modalité de stjr, catr, reg_actuelle ;
+  - tableaux/modalites_categorielles.csv : lignes et y = 1 par modalité de stjr, catr, reg_actuelle,
+    telle que déclarée (panel) et après regroupement des modalités rares (table de modélisation) ;
   - tableaux/indicateurs_par_classe.csv : chaque indicateur à 1, réparti en stables, décrochages, sorties ;
   - tableaux/taux_occupation.csv : lignes et y = 1 au-dessus de plusieurs taux d'occupation, et
     part expliquée par des journées exploitables trop basses ;
@@ -58,7 +59,11 @@ def main():
     config = charger_config()
     table = pd.read_parquet(chemin_donnees(config, "dossier_preparees") / "modelisation_mco.parquet")
     e = table[table["partie"] == "entrainement"].reset_index(drop=True)
-    numeriques = [c for c in e.columns if c not in ["fi", "t", "y", "partie", "classe"] + CATEGORIELLES]
+    panel = pd.read_parquet(chemin_donnees(config, "dossier_preparees") / "panel_mco.parquet")
+    brutes = panel[["fi", "an"] + CATEGORIELLES].rename(columns={"an": "t", **{c: f"{c}_brut" for c in CATEGORIELLES}})
+    e = e.merge(brutes, on=["fi", "t"], how="left", validate="one_to_one")
+    numeriques = [c for c in e.columns if c not in ["fi", "t", "y", "partie", "classe"] + CATEGORIELLES
+                  + [f"{c}_brut" for c in CATEGORIELLES]]
     sortie = racine_projet() / "resultats" / "03_exploration"
     tableaux, figures = sortie / "tableaux", sortie / "figures"
     tableaux.mkdir(parents=True, exist_ok=True)
@@ -98,18 +103,20 @@ def main():
     print("\n2. Lien avec la cible, 15 premières variables (AUC d'une variable seule ; sens - : plus petit = plus de y = 1) :")
     print(lien.head(15).round(3).to_string(index=False))
 
-    # 3. Modalités des variables catégorielles
+    # 3. Modalités des variables catégorielles, déclarées et regroupées
     lignes = []
     for c in CATEGORIELLES:
-        g = e.groupby(c).agg(lignes=("y", "size"), y1=("y", "sum"),
+        g = e.groupby([f"{c}_brut", c]).agg(lignes=("y", "size"), y1=("y", "sum"),
                              decrochages=("classe", lambda s: int((s == "decrochage").sum())),
                              sorties=("classe", lambda s: int((s == "sortie").sum())))
         g["y1_pct"] = 100 * g["y1"] / g["lignes"]
-        lignes.append(g.reset_index().rename(columns={c: "modalite"}).assign(variable=c))
-    modalites = pd.concat(lignes)[["variable", "modalite", "lignes", "y1", "y1_pct", "decrochages", "sorties"]]
+        lignes.append(g.reset_index().rename(columns={f"{c}_brut": "modalite", c: "modalite_regroupee"})
+                      .assign(variable=c))
+    modalites = pd.concat(lignes)[["variable", "modalite", "modalite_regroupee", "lignes", "y1", "y1_pct",
+                                   "decrochages", "sorties"]]
     modalites = modalites.sort_values(["variable", "lignes"], ascending=[True, False])
     modalites.round(2).to_csv(tableaux / "modalites_categorielles.csv", index=False)
-    print("\n3. Modalités de moins de 100 lignes :")
+    print("\n3. Modalités déclarées de moins de 100 lignes, et leur regroupement :")
     print(modalites[modalites["lignes"] < 100].round(1).to_string(index=False))
 
     # 4. Indicateurs par classe

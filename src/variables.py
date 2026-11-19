@@ -149,6 +149,21 @@ VARIABLES_INTERDITES = [
 # Variables catégorielles : gardées en texte dans la table, encodées en 0/1 dans chaque modèle.
 CATEGORIELLES = ["stjr", "catr", "reg_actuelle"]
 
+# Modalités rares (moins de 100 lignes à l'entraînement, scripts/07_exploration.py), regroupées pour
+# qu'aucune ne reçoive son propre coefficient. Chaque catégorie rare n'a qu'un statut juridique :
+# on les regroupe par statut.
+REGROUPEMENT_CATR = {
+    "PUB3": "PUB_autres", "PUB10": "PUB_autres",
+    "PLU5": "PLU_autres", "PLU7": "PLU_autres", "PLU8": "PLU_autres", "PLU10": "PLU_autres",
+    "PNL3": "PNL_autres", "PNL7": "PNL_autres", "PNL8": "PNL_autres",
+}
+# Régions d'outre-mer (Guadeloupe, Martinique, Guyane, La Réunion, Mayotte) : une seule modalité.
+REGIONS_OUTRE_MER = ["01", "02", "03", "04", "06"]
+
+# Taux d'occupation au-delà duquel la déclaration est impossible (journées, lits ou journées
+# exploitables mal déclarés) : indicateur inc_occupation_superieure_a_1_5.
+OCCUPATION_IMPOSSIBLE = 1.5
+
 
 def ratio(numerateur, denominateur):
     """numerateur / denominateur, vide quand le dénominateur est nul ou vide."""
@@ -162,11 +177,14 @@ def variables_explicatives(panel):
     panel : sortie de construire_panel avec la colonne activite (src.activite.calculer_activite).
     Renvoie fi, an et : les 29 quantités, l'activité et son logarithme, les ratios, la place du
     site dans son entité juridique (sites actifs en t), l'identité (texte) et les indicateurs.
-    Un ratio dont le dénominateur est nul ou vide reste vide.
+    Un ratio dont le dénominateur est nul ou vide reste vide. Taux d'occupation > 1,5 :
+    inc_occupation_superieure_a_1_5. Modalités rares regroupées : REGROUPEMENT_CATR (catr) et
+    REGIONS_OUTRE_MER (reg_actuelle = « outre_mer »).
     """
     v = panel[CLE + QUANTITES_MCO + ["activite"]].copy()
     v["log_activite"] = np.log1p(v["activite"])
     v["taux_occupation_mco"] = ratio(panel["jou_mco"], panel["jli_mco"])
+    v["inc_occupation_superieure_a_1_5"] = (v["taux_occupation_mco"] > OCCUPATION_IMPOSSIBLE).astype(int)
     v["part_partielle_mco"] = ratio(panel["sejhp_mco"], panel["sejhc_mco"] + panel["sejhp_mco"])
     v["duree_moyenne_sejour_mco"] = ratio(panel["jou_mco"], panel["sejhc_mco"] - panel["sej0_mco"])
     for d in DISCIPLINES[:3]:
@@ -181,7 +199,10 @@ def variables_explicatives(panel):
                                                                      index=panel.index))
 
     autres = CATEGORIELLES + list(INDICATEURS) + [c for c in panel.columns if c.startswith("inc_")]
-    return pd.concat([v, panel[autres]], axis=1)
+    v = pd.concat([v, panel[autres]], axis=1)
+    v["catr"] = v["catr"].replace(REGROUPEMENT_CATR)
+    v["reg_actuelle"] = v["reg_actuelle"].where(~v["reg_actuelle"].isin(REGIONS_OUTRE_MER), "outre_mer")
+    return v
 
 
 def verifier_sans_fuite(colonnes):
