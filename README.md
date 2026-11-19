@@ -74,7 +74,7 @@ python scripts/00_telecharger.py     # télécharge les 13 archives (~290 Mo) et
 python scripts/01_extraire.py        # extrait les tables utiles, prouve l'encodage de chaque fichier
 python scripts/02_audit_qualite.py   # audit : colonnes, manquants, types, clés, cohérence
 python scripts/03_panel.py           # panel : une ligne par établissement et par année
-python scripts/04_preanalyse.py      # pré-analyse des règles de la cible
+python scripts/04_preanalyse.py      # pré-analyse des règles de la cible et du découpage
 python scripts/06_dictionnaire.py    # dictionnaire des colonnes du panel
 python -m pytest                     # tests unitaires et d'intégration
 ```
@@ -88,7 +88,7 @@ flowchart LR
     A["00 · Télécharger<br/>archives + md5"] --> B["01 · Extraire<br/>encodages prouvés"]
     B --> C["02 · Audit<br/>qualité des données"]
     C --> D["03 · Panel<br/>établissement × année"]
-    D --> E["04 · Pré-analyse<br/>règles de la cible"]
+    D --> E["04 · Pré-analyse<br/>cible et découpage"]
     D --> F["06 · Dictionnaire<br/>des colonnes"]
 ```
 
@@ -111,7 +111,7 @@ sae-decrochage-mco/
 
 | Document | Contenu |
 |---|---|
-| [`docs/decisions.md`](docs/decisions.md) | chaque choix de méthode, sa justification, et des définitions en phrases simples (FINESS, entité juridique, fusion, scission…) |
+| [`docs/decisions.md`](docs/decisions.md) | chaque choix de méthode (données, cible, découpage, évaluation), sa justification, et des définitions en phrases simples (FINESS, entité juridique, fusion, scission…) |
 | [`docs/nettoyage_donnees.md`](docs/nettoyage_donnees.md) | résultats de l'audit et règles de nettoyage appliquées |
 | [`docs/dictionnaire.md`](docs/dictionnaire.md) | chaque colonne du panel : définition DREES, unité, source, règle, cases vides |
 
@@ -121,6 +121,7 @@ sae-decrochage-mco/
 - [x] Panel : nettoyage, identité, région actuelle, indicateurs
 - [x] Règles de la cible, avec leur pré-analyse
 - [x] Dictionnaire des colonnes du panel
+- [x] Découpage dans le temps et règles d'évaluation
 - [ ] Table de modélisation, modèles, évaluation
 - [ ] Application et rapport
 

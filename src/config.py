@@ -26,6 +26,7 @@ CLES_OBLIGATOIRES = {
     "perimetre": ["seuil_petits_etablissements"],
     "cible": ["reference", "ecart_points", "sortie_est_un_decrochage", "compensation_min",
               "retirer_restructurations"],
+    "decoupage": ["passages_exclus", "annees_test", "annees_min_entrainement"],
 }
 
 # Références d'évolution que le code sait calculer.
@@ -81,6 +82,21 @@ def verifier_config(config):
         raise ValueError("cible.ecart_points doit être strictement positif.")
     if not 0 < config["cible"]["compensation_min"] <= 1:
         raise ValueError("cible.compensation_min doit être dans ]0 ; 1].")
+
+    # 6. Découpage : années t possibles (la dernière année n'a pas de t+1), test et exclusions séparés
+    decoupage = config["decoupage"]
+    annees_t = range(donnees["annee_debut"], donnees["annee_fin"])
+    for cle in ("passages_exclus", "annees_test"):
+        hors = [a for a in decoupage[cle] if a not in annees_t]
+        if hors:
+            raise ValueError(f"decoupage.{cle} : années hors de {annees_t.start}-{annees_t.stop - 1} : {hors}.")
+    if not decoupage["annees_test"]:
+        raise ValueError("decoupage.annees_test ne doit pas être vide.")
+    communes = sorted(set(decoupage["passages_exclus"]) & set(decoupage["annees_test"]))
+    if communes:
+        raise ValueError(f"decoupage : années à la fois exclues et au test : {communes}.")
+    if decoupage["annees_min_entrainement"] < 1:
+        raise ValueError("decoupage.annees_min_entrainement doit valoir au moins 1.")
 
 
 def charger_config(chemin=None):

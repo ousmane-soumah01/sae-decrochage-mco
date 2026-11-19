@@ -67,3 +67,12 @@ cible:
   compensation_min: 0.5                  # restructuration probable si >= 50 % de la perte est retrouvée
                                          # dans le groupe (ou site cité dans une fusion / scission)
   retirer_restructurations: true         # restructurations probables retirées des lignes évaluées
+
+# -----------------------------------------------------------------------------
+# Découpage dans le temps (docs/decisions.md) : années t des passages t -> t+1
+# -----------------------------------------------------------------------------
+decoupage:
+  passages_exclus: [2019, 2020]          # passages Covid 2019->2020 et 2020->2021 : analysés à part
+  annees_test: [2023, 2024]              # test final, utilisé une seule fois
+  annees_min_entrainement: 1             # premier pli de la validation croisée (1 : tous les plis ;
+                                         # 3 : les plis d'au moins 3 années, point encore ouvert)

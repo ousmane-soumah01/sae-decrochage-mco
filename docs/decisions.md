@@ -83,6 +83,69 @@ Pourquoi pas « le groupe ne décroche pas » : un groupe peut absorber la baiss
 - au total : 183 décrochages et 118 sorties, contre 429 cas avec l'ancienne règle ; une fois retirées les 13 réapparitions (classe « inconnue »), le code (`src/cible.py`) compte 183 décrochages et 114 sorties restructurations probables, sur 1 143 décrochages et 213 sorties.
 `modej` (« modification de l'entité juridique ») n'est pas une preuve de transfert (un rachat ne déplace pas l'activité) : on le garde comme information, avec l'indicateur `changement_de_groupe` (186 passages). Variantes pour l'analyse de robustesse : compensation de 80 %, compensation seule sans les fusions, ancienne règle. Limite : la SAE ne suit pas les patients ; une restructuration reste une présomption.
 
+## Découpage et évaluation
+
+Vocabulaire. Une **ligne évaluée** est un passage t → t+1 dont la cible est connue (y = 0 ou 1) et qui n'est pas une restructuration probable. Un **pli** est un couple (années d'entraînement, année de validation). Pré-analyse : `scripts/04_preanalyse.py`, question 6. Fonctions : `src/decoupage.py`.
+
+**Validation croisée à fenêtre croissante, par année t** *(validé le 14/11/2026)*
+On apprend sur les années t passées et on valide sur l'année suivante : apprendre sur 2013, valider sur 2014 ; apprendre sur 2013–2014, valider sur 2015 ; et ainsi de suite. Le modèle n'apprend jamais sur l'avenir. Les plis n'ont pas la même taille, puisque le nombre d'établissements change d'une année à l'autre.
+Le découpage se fait sur l'année t de la ligne, pas sur les lignes (`plis_timeseriessplit.csv`). `TimeSeriesSplit` de scikit-learn ne met jamais l'avenir dans l'entraînement, mais il coupe le tableau trié en blocs de lignes de même taille (1 453 lignes ici), sans tenir compte des années : sur les 11 627 lignes d'entraînement, ses 7 plis ont tous une même année des deux côtés (pli 1 : validation sur 64 lignes de 2013 et 1 389 de 2014) et le pli 6 mélange 2018 et 2021. Les plis par année (`plis_par_annee`) n'ont aucun de ces défauts.
+Pas de fuite : la cible d'une ligne t dépend de t+1 ; quand on valide sur l'année v, les cibles d'entraînement dépendent au plus de l'année v, connue au moment de prédire pour v.
+
+**Passages Covid retirés de l'entraînement et du test, analysés à part** *(validé le 14/11/2026)*
+L'année 2020 intervient dans deux passages : 2019→2020 (la chute) et 2020→2021 (la remontée). Pré-analyse (`lignes_par_passage.csv`, figure `covid_et_test.png`), part de y = 1 parmi les lignes évaluées :
+
+| Passage | Lignes évaluées | y = 1 | Part de y = 1 | Référence nationale |
+|---|--:|--:|--:|--:|
+| 2013→2014 à 2018→2019 | 1 446 à 1 520 | 64 à 94 | 4,4 % à 6,2 % | −0,4 % à −1,2 % |
+| 2019→2020 | 1 435 | 121 | 8,4 % | −9,5 % |
+| 2020→2021 | 1 402 | 142 | 10,1 % | +2,8 % |
+| 2021→2022 | 1 412 | 93 | 6,6 % | −0,1 % |
+| 2022→2023 à 2024→2025 | 1 399 à 1 406 | 70 à 82 | 5,0 % à 5,8 % | +0,6 % à +1,4 % |
+
+La référence nationale absorbe la baisse commune, pas les écarts entre établissements, qui s'élargissent ces deux années-là. Le rattrapage est réel mais partiel (`indice_activite_base_2019.csv`, 1 329 établissements actifs les 13 années, indice 2019 = 100) : médiane 89,5 en 2020 et 95,0 en 2024 ; le quart du bas reste entre 82 et 84 de 2020 à 2025 ; le quart du haut dépasse 104 dès 2024. Ces deux passages (2 837 lignes, 263 y = 1) sont analysés à part, comme test de résistance du modèle. 2018→2019 (5,1 %) et 2021→2022 (6,6 %, proche de 2013→2014 : 6,2 %) sont gardés ; 2021→2022 est surveillé.
+Ne pas confondre avec la section Cible (8,1 % et 11,3 % pendant le Covid) : là, ce sont les décrochages seuls, sur tous les passages ; ici, les y = 1 (décrochages et sorties), sur les lignes évaluées.
+
+**Test final : t = 2023 et 2024, utilisé une seule fois** *(validé le 14/11/2026)*
+Sans les passages Covid, il reste 10 années, 14 432 lignes évaluées, 796 y = 1 (`proportion_test.csv`) :
+
+| Test final | Lignes | Part | y = 1 au test |
+|---|--:|--:|--:|
+| 1 an (t = 2024) | 1 406 | 9,7 % | 82 |
+| **2 ans (t = 2023, 2024)** | **2 805** | **19,4 %** | **152** |
+| 3 ans (t = 2022 à 2024) | 4 206 | 29,1 % | 232 |
+
+Deux ans donnent le partage 80 / 20 visé et une part de y = 1 presque identique des deux côtés (5,5 % à l'entraînement, 5,4 % au test). Un an laisse trop peu de décrochages pour mesurer de façon stable ; trois ans retirent 29 % des lignes et ne laissent qu'un passage d'après le Covid à l'entraînement. Le gain de précision au test avec trois ans est faible : pour un rappel autour de 50 %, la marge à 95 % passe d'environ ±8 points (152 cas) à environ ±6 points (232 cas).
+Entraînement et validation croisée : t = 2013 à 2018, 2021 et 2022 (11 627 lignes, 80,6 %, 644 y = 1). Le modèle est choisi en validation croisée seulement ; le test mesure le modèle retenu, une fois, à la fin.
+
+**Pas de variable du passé au départ** *(validé le 14/11/2026)*
+Les premiers modèles n'utilisent que l'état de l'établissement en t. On testera ensuite l'évolution de t−1 à t ; elle sera vide pour t = 2013 (pas d'année avant) et pour t = 2021 (2020 n'est utilisé nulle part). Elle est gardée seulement si la validation croisée montre qu'elle aide.
+
+**Aucune ligne supprimée, aucune valeur corrigée ; les incohérences deviennent des variables** *(validé le 14/11/2026)*
+Les cinq indicateurs `inc_*` entrent dans le modèle : une activité sans capacité déclarée peut signaler un changement administratif (observation de terrain : activité rattachée d'abord à l'entité juridique, puis à un nouveau site), donc peut-être un décrochage à venir. Retirer ces lignes rendrait le modèle aveugle là où il doit voir.
+
+**Cases vides, pour les modèles linéaires seulement** *(validé le 14/11/2026 ; séjours de 0 jour le 19/11/2026)*
+La table générale ne change pas ; les modèles à arbres gardent les cases vides. Sur les 14 432 lignes évaluées hors Covid, 710 (4,9 %) ont au moins une case vide, toutes dans les 29 quantités MCO (`cases_vides_modele.csv`) :
+- **journées, séjours de complète et venues vides → 0** (`jou_*`, `sejhc_*`, `sejhp_*`) : la capacité correspondante vaut 0 (pour `sejhp_*`, 67 cas sur 68) ; l'établissement n'a pas cette activité ;
+- **capacité vide → valeur de remplacement + indicateur « non déclaré »** (`lit_*`, `jli_*`, `pla_*`) : dans 100 % des cas l'activité correspondante est positive (par exemple les 299 `pla_obs` et les 229 `pla_med` vides), puisque la décision 1 du nettoyage a déjà mis à 0 les capacités vides d'activité nulle ; mettre 0 créerait de fausses incohérences (« 0 place, 2 000 venues ») ;
+- **séjours de 0 jour (`sej0_*`)** : vide → 0 quand l'établissement n'a pas de lit dans la discipline (37 cases sur 53) ; sinon (16 cases), **valeur de remplacement + indicateur « non déclaré »**. Pré-analyse (`sej0_vides_avec_lits.csv`) : ces 16 absences ne sont pas dues au hasard, 11 tombent en 2024 ; et chacun de ces établissements déclare des séjours de 0 jour les autres années (de 0,3 % à 46,2 % de ses séjours de complète, médiane 7,2 %). 0 serait donc faux. La valeur de remplacement n'utilise que les années passées de l'établissement (2025 pour une ligne de 2024 serait une fuite).
+Les valeurs de remplacement sont calculées dans chaque pli, sur l'entraînement seulement. À vérifier avant le test final : `sej0_mco` entre dans l'activité, où une case vide compte pour 0 ; 4 cases `sej0_mco` vides avec des lits sous-estiment un peu l'activité de leur ligne.
+
+**Battre le hasard, pli par pli** *(validé le 14/11/2026)*
+À l'entraînement, 5,54 % des lignes ont y = 1 : un modèle qui répond toujours « ne décroche pas » a 94,46 % d'exactitude sans rien prédire. L'exactitude n'est donc pas utilisée. Sur chaque pli, le modèle est comparé à son propre niveau de hasard :
+
+| Score | Niveau du hasard | Ce qu'il mesure |
+|---|---|---|
+| PR-AUC | part de y = 1 de l'année validée (de 4,4 % en 2015 à 6,6 % en 2021) | trouver les rares décrochages |
+| ROC-AUC | 0,5 | classer un décrocheur avant un non-décrocheur |
+| Brier | prédiction constante égale à la part de y = 1 | qualité des probabilités |
+
+Une règle naïve simple, à définir avec les modèles, sert d'adversaire plus dur que le hasard.
+
+**Restent ouverts**
+- Moyenne pour choisir le modèle : les 7 plis (`decoupage.annees_min_entrainement: 1`), ou les 5 plis qui ont au moins 3 années d'entraînement (validation sur 2016, 2017, 2018, 2021, 2022). Avec une seule année d'entraînement, le modèle gagnant est souvent le plus simple ; compter ces plis tire le choix vers des modèles faits pour peu de données. Les 7 plis sont calculés dans tous les cas (courbe d'apprentissage).
+- Valeur de remplacement des cases vides non déclarées : médiane de l'entraînement, ou ratio tiré de l'activité ou des années passées.
+
 ## Définitions en phrases simples
 
 - **FINESS** : le numéro d'identification de chaque établissement de santé en France (9 caractères). Un **site** (FINESS géographique, `fi`) est un lieu précis où l'on soigne ; une **entité juridique** (FINESS juridique, `fi_ej`) est la structure qui le possède et le gère, et peut avoir plusieurs sites.
