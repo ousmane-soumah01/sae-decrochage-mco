@@ -72,6 +72,16 @@ Question 7 : les sorties et les décrochages restants cachent-ils des mouvements
     repreneur est dans la même entité juridique (transfert ou regroupement interne) ou non ;
     capacité de l'ancien site en t+1 et années où il est encore dans la SAE après t (un site
     qui garde des lits n'a pas disparu : la règle retenue exige qu'il perde toutes ses capacités).
+
+Question 8 : un site qui déclare 0 lit et 0 place MCO en t+1, mais encore de l'activité, a-t-il
+fermé en cours d'année (décrochage ou sortie) ?
+  - fermeture_en_cours_bilan.csv : ces passages (capacité > 0 en t), par groupe (stable,
+    décrochage gardé ou déjà repéré), selon ce que devient le site : plus jamais actif après
+    t+1, actif à nouveau plus tard, ou suite inconnue (t+1 = dernière année) ; activité de t+1
+    en % de celle de t ;
+  - fermeture_en_cours_par_partie.csv : décrochages et sorties des lignes évaluées, par partie,
+    et ce qu'ils deviendraient si les fermetures définitives en cours d'année étaient des sorties ;
+  - fermeture_en_cours_cas.csv : chaque passage concerné.
 """
 
 import copy
@@ -442,6 +452,9 @@ def main():
     # --- Question 7 : mouvements de structure ----------------------------------------
     question_7(panel, config, tableaux)
 
+    # --- Question 8 : fermeture en cours d'année ---------------------------------------
+    question_8(panel, config, tableaux)
+
     print(f"\nTableaux écrits dans {tableaux.relative_to(racine_projet())}, figures dans "
           f"{figures.relative_to(racine_projet())}")
 
@@ -753,6 +766,57 @@ def question_7(panel, config, tableaux):
     print(f"    Anciens sites qui gardent des lits ou des places en t+1 : "
           f"{int((nouveaux['capacite_t1'] > 0).sum())} sur {len(nouveaux)} nouveaux")
     print(trouvees_y1.to_string(index=False))
+
+
+def question_8(panel, config, tableaux):
+    """Question 8 : 0 lit et 0 place MCO en t+1 avec encore de l'activité : fermeture en cours d'année ?"""
+    annees = range(config["donnees"]["annee_debut"], config["donnees"]["annee_fin"] + 1)
+    identite = empiler_table(config, "ID", annees, chemin_donnees(config, "dossier_extraites"))
+    c = restructurations(classer(construire_passages(panel, config), panel, config), panel, identite, config)
+    c = c[c["y"].notna()].reset_index(drop=True)
+    decoupage = config["decoupage"]
+    c["partie"] = np.where(c["t"].isin(decoupage["passages_exclus"]), "covid",
+                           np.where(c["t"].isin(decoupage["annees_test"]), "test", "entrainement"))
+    c["groupe"] = groupe_de_ligne(c)
+    capacite = dict(zip(zip(panel["fi"], panel["an"]), panel["lit_mco"].fillna(0) + panel["pla_mco"].fillna(0)))
+    derniere_active = panel[panel["activite"] > 0].groupby("fi")["an"].max()
+    c["capacite_t"] = [capacite.get((f, t), np.nan) for f, t in zip(c["fi"], c["t"])]
+    c["capacite_t1"] = [capacite.get((f, t + 1), np.nan) for f, t in zip(c["fi"], c["t"])]
+    c["derniere_annee_active"] = c["fi"].map(derniere_active)
+    cas = c[c["actif_t1"] & (c["capacite_t1"] == 0) & (c["capacite_t"] > 0)].copy()
+    cas["devenir"] = np.select([cas["t"] + 2 > config["donnees"]["annee_fin"],
+                                cas["derniere_annee_active"] == cas["t"] + 1],
+                               ["suite inconnue (t+1 = dernière année)", "plus jamais actif après t+1"],
+                               "actif à nouveau plus tard")
+    cas["activite_t1_pct_de_t"] = (100 * cas["activite_t1"] / cas["activite_t"]).round(1)
+
+    # 22. Ce que deviennent les sites à 0 capacité en t+1
+    bilan = pd.crosstab(cas["groupe"], cas["devenir"], margins=True, margins_name="total")
+    bilan["activite_t1_pct_de_t_mediane"] = cas.groupby("groupe")["activite_t1_pct_de_t"].median()
+    bilan.round(1).to_csv(tableaux / "fermeture_en_cours_bilan.csv")
+    print(f"\n22. Passages actifs en t+1 avec 0 lit et 0 place MCO en t+1 (capacité > 0 en t) : {len(cas)}")
+    print(bilan.round(1).to_string())
+
+    # 23. Décrochages et sorties des lignes évaluées, avant et après reclassement
+    ev = c[c["restructuration_probable"] == 0]
+    definitives = cas[(cas["restructuration_probable"] == 0) & (cas["classe"] == "decrochage")
+                      & (cas["devenir"] == "plus jamais actif après t+1")]
+    par_partie = pd.DataFrame({
+        "decrochages": ev[ev["classe"] == "decrochage"].groupby("partie").size(),
+        "sorties": ev[ev["classe"] == "sortie"].groupby("partie").size(),
+        "fermetures_definitives_parmi_les_decrochages": definitives.groupby("partie").size(),
+    }).fillna(0).astype(int).reindex(["entrainement", "test", "covid"])
+    par_partie["decrochages_apres"] = par_partie["decrochages"] - par_partie["fermetures_definitives_parmi_les_decrochages"]
+    par_partie["sorties_apres"] = par_partie["sorties"] + par_partie["fermetures_definitives_parmi_les_decrochages"]
+    par_partie.to_csv(tableaux / "fermeture_en_cours_par_partie.csv")
+    print("\n23. Lignes évaluées : décrochages et sorties, si les fermetures définitives en cours d'année "
+          "devenaient des sorties :")
+    print(par_partie.to_string())
+
+    colonnes = ["fi", "t", "partie", "classe", "y", "restructuration_probable", "activite_t", "activite_t1",
+                "activite_t1_pct_de_t", "capacite_t", "derniere_annee_active", "devenir"]
+    cas[colonnes].sort_values(["devenir", "classe", "t", "fi"]).to_csv(tableaux / "fermeture_en_cours_cas.csv",
+                                                                       index=False)
 
 
 if __name__ == "__main__":
