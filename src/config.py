@@ -24,8 +24,8 @@ CLES_OBLIGATOIRES = {
     "activite": ["colonne_journees_complete", "colonne_venues_partielle",
                  "colonne_sejours_0_jour", "poids_partielle", "poids_sejours_0_jour"],
     "perimetre": ["seuil_petits_etablissements"],
-    "cible": ["reference", "ecart_points", "sortie_est_un_decrochage", "compensation_min",
-              "reprise", "retirer_restructurations"],
+    "cible": ["reference", "ecart_points", "sortie_est_un_decrochage", "fermeture_en_cours_est_une_sortie",
+              "compensation_min", "reprise", "retirer_restructurations"],
     "decoupage": ["passages_exclus", "annees_test", "annees_min_entrainement"],
 }
 
@@ -86,6 +86,8 @@ def verifier_config(config):
         raise ValueError("cible.ecart_points doit être strictement positif.")
     if not 0 < config["cible"]["compensation_min"] <= 1:
         raise ValueError("cible.compensation_min doit être dans ]0 ; 1].")
+    if not isinstance(config["cible"]["fermeture_en_cours_est_une_sortie"], bool):
+        raise ValueError("cible.fermeture_en_cours_est_une_sortie doit valoir true ou false.")
     reprise = config["cible"]["reprise"]
     manquantes = [cle for cle in CLES_REPRISE if cle not in reprise]
     if manquantes:

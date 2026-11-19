@@ -4,7 +4,8 @@ Pour chaque établissement au-dessus du seuil en t et son passage t -> t+1 :
   1. référence = évolution nationale pondérée (somme des activités t+1 / somme en t - 1),
      sur les établissements actifs en t+1 ;
   2. décrochage : évolution de l'établissement < référence - 15 points ;
-  3. sortie : établissement absent ou sans activité en t+1 ; une sortie compte comme
+  3. sortie : établissement absent ou sans activité en t+1, ou qui ferme en cours d'année
+     (0 lit et 0 place MCO en t+1 et plus aucune activité ensuite) ; une sortie compte comme
      un décrochage (y = 1), sauf s'il réapparaît plus tard (activité en t+1 inconnue) ;
   4. restructuration probable : y = 1, et (au moins 50 % de la perte retrouvée dans les
      autres sites du groupe au-delà de la référence, ou site cité dans une fusion ou une
@@ -29,8 +30,8 @@ from src.activite import est_eligible
 # Colonnes de la table ID qui citent les établissements concernés par une fusion ou une scission.
 COLONNES_FUSION_SCISSION = ["fifu1", "fifu2", "fifu3", "scfu1", "scfu2", "scfu3"]
 
-# Capacités MCO comparées pour repérer une reprise par un autre site.
-CAPACITES_REPRISE = ["lit_mco", "pla_mco"]
+# Capacités MCO : fermeture en cours d'année, et reprise par un autre site.
+CAPACITES_MCO = ["lit_mco", "pla_mco"]
 
 
 def construire_passages(panel, config):
@@ -83,10 +84,31 @@ def ecarts_et_decrochages(passages, config):
     return p
 
 
+def fermetures_en_cours(passages, panel, config):
+    """Vrai si le site, actif en t+1, déclare 0 lit et 0 place MCO en t+1 alors qu'il en avait en t,
+    et n'a plus aucune activité après t+1 : il a fermé pendant l'année t+1 (la SAE déclare l'activité
+    faite avant la fermeture et les capacités au 31 décembre).
+
+    Faux si t+1 est la dernière année du panel (la suite n'est pas connue), si la règle est
+    désactivée (cible.fermeture_en_cours_est_une_sortie) ou si le panel n'a pas les capacités.
+    """
+    faux = pd.Series(False, index=passages.index)
+    if not config["cible"]["fermeture_en_cours_est_une_sortie"] or not set(CAPACITES_MCO) <= set(panel.columns):
+        return faux
+    capacite = dict(zip(zip(panel["fi"], panel["an"]), panel[CAPACITES_MCO].fillna(0).sum(axis=1)))
+    capacite_t = np.array([capacite.get(k, np.nan) for k in zip(passages["fi"], passages["t"])])
+    capacite_t1 = np.array([capacite.get(k, np.nan) for k in zip(passages["fi"], passages["t1"])])
+    derniere_active = passages["fi"].map(panel[panel["activite"] > 0].groupby("fi")["an"].max()).to_numpy()
+    t1 = passages["t1"].to_numpy()
+    return pd.Series(passages["actif_t1"].to_numpy() & (capacite_t1 == 0) & (capacite_t > 0)
+                     & (derniere_active == t1) & (t1 < panel["an"].max()), index=passages.index)
+
+
 def classer(passages, panel, config):
     """Classe chaque passage : stable, decrochage, sortie ou inconnue ; et calcule y.
 
     sortie   : inactif en t+1 (absent ou activité nulle), et jamais réapparu ensuite ;
+               ou décrochage d'un site qui ferme en cours d'année t+1 (fermetures_en_cours) ;
     inconnue : absent en t+1 mais réapparu plus tard (trou de déclaration ou fermeture
                temporaire : on ne connaît pas son activité en t+1) ;
     y = 1 pour un décrochage ou une sortie (cible.sortie_est_un_decrochage), 0 pour
@@ -98,6 +120,8 @@ def classer(passages, panel, config):
                                for fi, t1, actif in zip(p["fi"], p["t1"], p["actif_t1"])]
     p["classe"] = "stable"
     p.loc[p["decrochage"], "classe"] = "decrochage"
+    p["fermeture_en_cours"] = fermetures_en_cours(p, panel, config).astype(int)
+    p.loc[(p["fermeture_en_cours"] == 1) & (p["classe"] == "decrochage"), "classe"] = "sortie"
     p.loc[~p["actif_t1"], "classe"] = "sortie"
     p.loc[p["reapparu_plus_tard"], "classe"] = "inconnue"
     sortie_y = 1 if config["cible"]["sortie_est_un_decrochage"] else 0
@@ -163,9 +187,9 @@ def reprises_de_capacites(classes, panel, config):
     """
     r = config["cible"]["reprise"]
     lignes = []
-    if r["active"] and set(CAPACITES_REPRISE + ["dep"]) <= set(panel.columns):
+    if r["active"] and set(CAPACITES_MCO + ["dep"]) <= set(panel.columns):
         cap = panel[["fi", "an", "fi_ej", "dep"]].copy()
-        cap["cap"] = panel[CAPACITES_REPRISE].fillna(0).sum(axis=1)
+        cap["cap"] = panel[CAPACITES_MCO].fillna(0).sum(axis=1)
         cap["activite"] = panel["activite"].fillna(0)
         for t, cas in classes[classes["y"] == 1].groupby("t"):
             avant = cap[cap["an"] == t].set_index("fi")

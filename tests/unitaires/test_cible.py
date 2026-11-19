@@ -239,3 +239,58 @@ def test_reprise_desactivee_ou_sans_capacites(config):
     sans_lits = panel_reprise().drop(columns=["lit_mco", "pla_mco"])
     classes = classer(construire_passages(sans_lits, config), sans_lits, config)
     assert reprises_de_capacites(classes, sans_lits, config).empty
+
+
+# --- fermeture en cours d'année ---------------------------------------------------------
+
+def panel_fermeture(activite_2024=4_000.0, lits_2024=0.0, actif_2025=False):
+    """F : 50 lits et 10 000 journées en 2023 ; en 2024, activite_2024 et lits_2024 ; en 2025, actif
+    ou absent. H : grand site stable de 2023 à 2025, qui fixe la référence à 0."""
+    lignes = [("F", 2023, 10_000.0, 50.0), ("F", 2024, activite_2024, lits_2024),
+              ("H", 2023, 100_000.0, 400.0), ("H", 2024, 100_000.0, 400.0), ("H", 2025, 100_000.0, 400.0)]
+    if actif_2025:
+        lignes.append(("F", 2025, 3_000.0, 10.0))
+    p = pd.DataFrame(lignes, columns=["fi", "an", "activite", "lit_mco"])
+    p["pla_mco"], p["fi_ej"] = 0.0, "E" + p["fi"]
+    return p
+
+
+def classe_de_f_en_2023(panel, config):
+    c = classer(construire_passages(panel, config), panel, config)
+    return c[(c.fi == "F") & (c.t == 2023)].iloc[0]
+
+
+def test_fermeture_en_cours_d_annee_devient_une_sortie(config):
+    # 10 000 -> 4 000 journées, 0 lit au 31/12/2024, plus rien en 2025 : sortie, y = 1.
+    f = classe_de_f_en_2023(panel_fermeture(), config)
+    assert f["decrochage"] and f["fermeture_en_cours"] == 1
+    assert f["classe"] == "sortie" and f["y"] == 1
+
+
+def test_pas_de_fermeture_si_le_site_est_encore_actif_ensuite(config):
+    f = classe_de_f_en_2023(panel_fermeture(actif_2025=True), config)
+    assert f["fermeture_en_cours"] == 0 and f["classe"] == "decrochage"
+
+
+def test_pas_de_fermeture_si_le_site_garde_des_lits(config):
+    f = classe_de_f_en_2023(panel_fermeture(lits_2024=12.0), config)
+    assert f["fermeture_en_cours"] == 0 and f["classe"] == "decrochage"
+
+
+def test_pas_de_fermeture_quand_t1_est_la_derniere_annee(config):
+    # Sans 2025 dans le panel, on ne sait pas si F reprend : il reste un décrochage.
+    panel = panel_fermeture()
+    panel = panel[panel.an < 2025]
+    f = classe_de_f_en_2023(panel, config)
+    assert f["fermeture_en_cours"] == 0 and f["classe"] == "decrochage"
+
+
+def test_un_stable_qui_ferme_en_fin_d_annee_reste_stable(config):
+    # Activité presque inchangée en 2024, puis fermeture : pas de baisse en 2023 -> 2024, y = 0.
+    f = classe_de_f_en_2023(panel_fermeture(activite_2024=9_800.0), config)
+    assert f["fermeture_en_cours"] == 1 and f["classe"] == "stable" and f["y"] == 0
+
+
+def test_fermeture_desactivee(config):
+    config["cible"]["fermeture_en_cours_est_une_sortie"] = False
+    assert classe_de_f_en_2023(panel_fermeture(), config)["classe"] == "decrochage"

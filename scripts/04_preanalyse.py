@@ -56,8 +56,9 @@ Question 6 : comment découper les années pour apprendre, valider et tester ?
     des lits dans la discipline (mécanisme d'absence) ;
   - figure covid_et_test.png.
 
-Les questions 6 et 7 comptent les restructurations probables sans la reprise des capacités
-(cible.reprise), décidée après la question 7 : la cible telle qu'elle était à ces décisions.
+Les questions 6 à 8 utilisent la cible telle qu'elle était à ces décisions : sans la reprise des
+capacités (cible.reprise, décidée après la question 7) pour les questions 6 et 7, et sans la
+fermeture en cours d'année (cible.fermeture_en_cours_est_une_sortie, décidée après la question 8).
 
 Question 7 : les sorties et les décrochages restants cachent-ils des mouvements de structure ?
 (passages dont la cible est connue ; « déjà repéré » = restructuration probable de la question 5)
@@ -459,16 +460,20 @@ def main():
           f"{figures.relative_to(racine_projet())}")
 
 
-def sans_reprise(config):
-    """Copie de la configuration sans la reprise des capacités (décidée après la question 7)."""
+def sans_regles_posterieures(config, reprise=True, fermeture=True):
+    """Copie de la configuration sans les règles de la cible décidées après une question : la reprise
+    des capacités (après la question 7) et la fermeture en cours d'année (après la question 8)."""
     copie = copy.deepcopy(config)
-    copie["cible"]["reprise"]["active"] = False
+    if reprise:
+        copie["cible"]["reprise"]["active"] = False
+    if fermeture:
+        copie["cible"]["fermeture_en_cours_est_une_sortie"] = False
     return copie
 
 
 def question_6(panel, config, tableaux, figures):
     """Question 6 : passages Covid, années de test, plis de validation et cases vides."""
-    config = sans_reprise(config)
+    config = sans_regles_posterieures(config)
     annees = range(config["donnees"]["annee_debut"], config["donnees"]["annee_fin"] + 1)
     identite = empiler_table(config, "ID", annees, chemin_donnees(config, "dossier_extraites"))
     classes = restructurations(classer(construire_passages(panel, config), panel, config),
@@ -699,7 +704,7 @@ def reprises(c, capacites, seuil):
 
 def question_7(panel, config, tableaux):
     """Question 7 : mouvements déclarés dans la table ID et reprise des capacités par un autre site."""
-    config = sans_reprise(config)
+    config = sans_regles_posterieures(config)
     annees = range(config["donnees"]["annee_debut"], config["donnees"]["annee_fin"] + 1)
     identite = empiler_table(config, "ID", annees, chemin_donnees(config, "dossier_extraites"))
     c = restructurations(classer(construire_passages(panel, config), panel, config), panel, identite, config)
@@ -770,6 +775,7 @@ def question_7(panel, config, tableaux):
 
 def question_8(panel, config, tableaux):
     """Question 8 : 0 lit et 0 place MCO en t+1 avec encore de l'activité : fermeture en cours d'année ?"""
+    config = sans_regles_posterieures(config, reprise=False)
     annees = range(config["donnees"]["annee_debut"], config["donnees"]["annee_fin"] + 1)
     identite = empiler_table(config, "ID", annees, chemin_donnees(config, "dossier_extraites"))
     c = restructurations(classer(construire_passages(panel, config), panel, config), panel, identite, config)

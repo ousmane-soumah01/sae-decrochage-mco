@@ -141,6 +141,7 @@ def construire_panel(config, dossier_extraites, annees):
 VARIABLES_INTERDITES = [
     "fi", "fi_ej", "rs", "an", "t", "t1", "y", "classe", "activite_t", "activite_t1", "fi_ej_t1",
     "actif_t1", "evolution", "reference", "ecart_points", "decrochage", "reapparu_plus_tard",
+    "fermeture_en_cours",
     "compensation", "cite_fusion_scission", "reprise_capacites", "reprise_meme_ej",
     "restructuration_probable", "changement_de_groupe",
 ]

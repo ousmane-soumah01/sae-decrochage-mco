@@ -40,6 +40,7 @@ CONFIG_MINIMALE = {
     },
     "perimetre": {"seuil_petits_etablissements": 1000},
     "cible": {"reference": "moyenne_ponderee", "ecart_points": 15, "sortie_est_un_decrochage": True,
+              "fermeture_en_cours_est_une_sortie": True,
               "compensation_min": 0.5, "retirer_restructurations": True,
               "reprise": {"active": True, "perte_min": 30, "part_perte_min": 1.0, "tolerance_absolue": 2,
                           "tolerance_relative": 0.1, "candidats_max": 6, "part_activite_min": 0.5}},
@@ -168,6 +169,11 @@ def test_verifier_config_refuse_une_compensation_hors_de_0_1(config, valeur):
     with pytest.raises(ValueError, match="compensation_min"):
         verifier_config(config)
 
+
+def test_verifier_config_refuse_une_fermeture_qui_n_est_pas_vrai_ou_faux(config):
+    config["cible"]["fermeture_en_cours_est_une_sortie"] = "oui"
+    with pytest.raises(ValueError, match="fermeture_en_cours_est_une_sortie"):
+        verifier_config(config)
 
 def test_verifier_config_refuse_une_cle_de_reprise_manquante(config):
     del config["cible"]["reprise"]["candidats_max"]
