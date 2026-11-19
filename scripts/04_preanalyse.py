@@ -55,6 +55,18 @@ Question 6 : comment découper les années pour apprendre, valider et tester ?
   - sej0_vides_avec_lits.csv : séjours de 0 jour non renseignés alors que l'établissement a
     des lits dans la discipline (mécanisme d'absence) ;
   - figure covid_et_test.png.
+
+Question 7 : les sorties et les décrochages restants cachent-ils des mouvements de structure ?
+(passages dont la cible est connue ; « déjà repéré » = restructuration probable de la question 5)
+  - mouvements_declares.csv : part des lignes qui portent chaque mouvement déclaré dans la
+    table ID (changement d'entité juridique, modification de l'entité, fusion, scission,
+    création, citations) ou observé (fi_ej qui change), comparée aux lignes stables (y = 0) ;
+  - reprise_capacites.csv : sites qui perdent au moins SEUIL lits et places MCO (et au moins
+    30 % de leurs capacités) ; part dont un autre site du même département gagne la même
+    capacité en t+1, avec une hausse d'activité, et au plus 6 sites candidats en France ;
+    même test avec les gains de t-1 -> t (placebo : ils ne peuvent pas venir de cette perte) ;
+  - reprises_trouvees.csv : chaque passage y = 1 avec une reprise, son repreneur, et si le
+    repreneur est dans la même entité juridique (transfert ou regroupement interne) ou non.
 """
 
 import sys
@@ -77,6 +89,7 @@ from sklearn.model_selection import TimeSeriesSplit  # noqa: E402
 from src.activite import calculer_activite, est_eligible  # noqa: E402
 from src.chargement import empiler_table  # noqa: E402
 from src.cible import (  # noqa: E402
+    COLONNES_FUSION_SCISSION,
     classer,
     construire_passages,
     ecarts_et_decrochages,
@@ -97,6 +110,12 @@ ANNEES_DE_TEST_CANDIDATES = [1, 2, 3]         # nombre de dernières années t g
 DISCIPLINES = ["med", "chi", "obs", "mco"]
 CAPACITE_ET_ACTIVITE = [("lit", "jou"), ("jli", "jou"), ("pla", "sejhp")]   # capacité vide -> activité ?
 ACTIVITE_ET_CAPACITE = [("jou", "lit"), ("sejhc", "lit"), ("sej0", "lit"), ("sejhp", "pla")]  # et l'inverse
+# Question 7 : candidats examinés (les choix retenus iront dans config.yaml)
+SEUILS_REPRISE_CANDIDATS = [20, 30]           # perte minimale de lits + places MCO
+PART_PERTE_MIN = 0.3                          # et au moins 30 % des capacités du site
+TOLERANCE_REPRISE = (2, 0.10)                 # gain égal à la perte, à 2 près ou à 10 % près
+CANDIDATS_MAX = 6                             # au-delà, la correspondance peut être le hasard
+PART_ACTIVITE_REPRISE = 0.5                   # le repreneur gagne au moins la moitié de l'activité perdue
 
 
 def evolutions(panel):
@@ -414,6 +433,9 @@ def main():
     # --- Question 6 : découpage des années ------------------------------------------
     question_6(panel, config, tableaux, figures)
 
+    # --- Question 7 : mouvements de structure ----------------------------------------
+    question_7(panel, config, tableaux)
+
     print(f"\nTableaux écrits dans {tableaux.relative_to(racine_projet())}, figures dans "
           f"{figures.relative_to(racine_projet())}")
 
@@ -555,6 +577,160 @@ def question_6(panel, config, tableaux, figures):
     fig.tight_layout()
     fig.savefig(figures / "covid_et_test.png", dpi=130)
     plt.close(fig)
+
+
+def groupe_de_ligne(c):
+    """stable (y = 0), décrochage ou sortie, gardé ou déjà repéré (restructuration probable)."""
+    return np.where(c["y"] == 0, "stable (y=0)",
+                    c["classe"] + np.where(c["restructuration_probable"] == 1, " déjà repéré", " gardé"))
+
+
+def mouvements_declares(c, identite):
+    """Mouvements déclarés dans la table ID pour chaque passage (fi, t), en t ou en t+1."""
+    ident = identite.copy()
+    ident["an"] = ident["an"].astype(int)
+    for col in ["fi", "fi_ej", "fipre"] + COLONNES_FUSION_SCISSION:
+        ident[col] = ident[col].str.strip().str.zfill(9)
+    for col in ["chlej0", "modej", "typmd1", "typmd2", "typmd3"]:
+        ident[col] = pd.to_numeric(ident[col], errors="coerce").fillna(0).astype(int)
+    site = ident.drop_duplicates(["fi", "an"]).set_index(["fi", "an"])
+    cle_t = list(zip(c["fi"], c["t"]))
+    cle_t1 = list(zip(c["fi"], c["t"] + 1))
+
+    def declare(col, cles):
+        valeurs = site[col]
+        return np.array([valeurs.get(k, 0) == 1 for k in cles])
+
+    m = pd.DataFrame(index=c.index)
+    m["entite_changee_declaree"] = declare("chlej0", cle_t1)
+    for col, nom in [("modej", "modification_entite"), ("typmd2", "fusion"), ("typmd3", "scission"),
+                     ("typmd1", "creation")]:
+        m[nom] = declare(col, cle_t) | declare(col, cle_t1)
+    cites = set()
+    for col in COLONNES_FUSION_SCISSION:
+        x = ident[ident[col].notna()]
+        cites |= set(zip(x[col], x["an"], x["fi"]))
+    par_soi = {(f, a) for f, a, d in cites if f == d}
+    cites_finess = {(f, a) for f, a, _ in cites}
+    m["se_cite_lui_meme"] = [(f, t) in par_soi or (f, t + 1) in par_soi for f, t in cle_t]
+    m["cite_par_un_autre"] = c["cite_fusion_scission"].astype(bool).to_numpy()
+    m["entite_citee"] = [(e, t) in cites_finess or (e, t + 1) in cites_finess for e, t in zip(c["fi_ej"], c["t"])]
+    avec_fipre = ident[ident["fipre"].notna()]
+    fipre = set(zip(avec_fipre["fipre"], avec_fipre["an"]))
+    m["entite_precedente_d_un_site_en_t1"] = [(e, t + 1) in fipre for e, t in zip(c["fi_ej"], c["t"])]
+    avec_modej = ident[ident["modej"] == 1]
+    modej = set(zip(avec_modej["fi_ej"], avec_modej["an"]))
+    m["modification_dans_l_entite"] = [(e, t) in modej or (e, t + 1) in modej for e, t in zip(c["fi_ej"], c["t"])]
+    m["entite_changee_observee"] = c["changement_de_groupe"].astype(bool).to_numpy()
+    m["au_moins_un"] = m.any(axis=1)
+    return m
+
+
+def gains_de_capacite(capacites, a0, a1):
+    """Sites qui gagnent au moins 5 lits et places MCO entre a0 et a1 (absents en a0 : 0)."""
+    avant = capacites[capacites["an"] == a0][["fi", "fi_ej", "cap", "activite"]]
+    x = capacites[capacites["an"] == a1].merge(avant, on="fi", how="left", suffixes=("", "_avant"))
+    x["gain"] = x["cap"] - x["cap_avant"].fillna(0)
+    x["gain_activite"] = x["activite"] - x["activite_avant"].fillna(0)
+    x["nouveau_finess"] = x["cap_avant"].isna()
+    return x[x["gain"] >= 5]
+
+
+def reprises(c, capacites, seuil):
+    """Pour chaque passage à forte perte de capacité : reprise stricte en t+1, et placebo (gains de t-1 -> t)."""
+    cap = capacites.set_index(["fi", "an"])
+    gains = {a: gains_de_capacite(capacites, a - 1, a) for a in sorted(capacites["an"].unique())[1:]}
+    absolue, relative = TOLERANCE_REPRISE
+    resultats = []
+    for r in c.itertuples():
+        t = int(r.t)
+        if (r.fi, t) not in cap.index:
+            continue
+        a = cap.loc[(r.fi, t)]
+        cap1 = cap["cap"].get((r.fi, t + 1), 0.0)
+        act1 = cap["activite"].get((r.fi, t + 1), 0.0)
+        perte = a["cap"] - (0.0 if pd.isna(cap1) else cap1)
+        perte_activite = max(a["activite"] - (0.0 if pd.isna(act1) else act1), 0.0)
+        if perte < seuil or perte < PART_PERTE_MIN * a["cap"]:
+            continue
+        ligne = {"fi": r.fi, "t": t, "perte": perte, "fi_ej": a["fi_ej"]}
+        for nom, annee in [("reprise", t + 1), ("placebo", t)]:
+            g = gains.get(annee)
+            if g is None:
+                ligne[nom] = np.nan
+                continue
+            m = g[(g["fi"] != r.fi) & ((g["gain"] - perte).abs() <= max(absolue, relative * perte))]
+            k = m[(m["dep"] == a["dep"]) & (m["gain_activite"] >= PART_ACTIVITE_REPRISE * perte_activite)]
+            ligne[nom] = bool(len(m) <= CANDIDATS_MAX and perte_activite > 0 and len(k) > 0)
+            if nom == "reprise":
+                ligne["candidats_en_france"] = len(m)
+                ligne["repreneurs"] = k if ligne[nom] else k.iloc[0:0]
+        resultats.append(ligne)
+    return resultats
+
+
+def question_7(panel, config, tableaux):
+    """Question 7 : mouvements déclarés dans la table ID et reprise des capacités par un autre site."""
+    annees = range(config["donnees"]["annee_debut"], config["donnees"]["annee_fin"] + 1)
+    identite = empiler_table(config, "ID", annees, chemin_donnees(config, "dossier_extraites"))
+    c = restructurations(classer(construire_passages(panel, config), panel, config), panel, identite, config)
+    c = c[c["y"].notna()].reset_index(drop=True)
+    decoupage = config["decoupage"]
+    c["partie"] = np.where(c["t"].isin(decoupage["passages_exclus"]), "covid",
+                           np.where(c["t"].isin(decoupage["annees_test"]), "test", "entrainement"))
+    c["groupe"] = groupe_de_ligne(c)
+
+    # 19. Mouvements déclarés
+    m = mouvements_declares(c, identite)
+    lignes = []
+    for perimetre, masque in [("entrainement", c["partie"] == "entrainement"), ("toutes", c["partie"].notna())]:
+        g = (100 * m[masque].groupby(c.loc[masque, "groupe"]).mean()).round(2)
+        g.insert(0, "lignes", c[masque].groupby("groupe").size())
+        lignes.append(g.assign(perimetre=perimetre).reset_index())
+    declares = pd.concat(lignes).set_index(["perimetre", "groupe"])
+    declares.to_csv(tableaux / "mouvements_declares.csv")
+    print("\n19. Mouvements déclarés dans la table ID (% des lignes de chaque groupe, en t ou t+1) :")
+    print(declares.T.to_string())
+
+    # 20. Reprise des capacités par un autre site, selon le seuil de perte
+    capacites = panel[["fi", "an", "fi_ej", "dep", "activite"]].copy()
+    capacites["cap"] = panel["lit_mco"].fillna(0) + panel["pla_mco"].fillna(0)
+    lignes, trouvees = [], {}
+    for seuil in SEUILS_REPRISE_CANDIDATS:
+        r = pd.DataFrame(reprises(c, capacites, seuil))
+        r = r.merge(c[["fi", "t", "partie", "groupe", "classe", "restructuration_probable"]], on=["fi", "t"])
+        trouvees[seuil] = r[r["reprise"] == True]  # noqa: E712
+        for perimetre, x in [("entrainement", r[r["partie"] == "entrainement"]), ("toutes", r)]:
+            for groupe, g in x.groupby("groupe"):
+                lignes.append({"seuil": seuil, "perimetre": perimetre, "groupe": groupe, "fortes_pertes": len(g),
+                               "reprises": int(g["reprise"].sum()), "reprises_pct": 100 * g["reprise"].mean(),
+                               "placebo_pct": 100 * g["placebo"].astype(float).mean()})
+    reprise = pd.DataFrame(lignes)
+    reprise.round(2).to_csv(tableaux / "reprise_capacites.csv", index=False)
+    print("\n20. Reprise stricte des capacités perdues (même département, hausse d'activité, "
+          f"au plus {CANDIDATS_MAX} candidats) et placebo t-1 -> t :")
+    print(reprise.round(1).to_string(index=False))
+
+    # 21. Reprises trouvées (y = 1), au plus grand seuil
+    ident = identite.assign(an=identite["an"].astype(int)).drop_duplicates(["fi", "an"]).set_index(["fi", "an"])
+    seuil = max(SEUILS_REPRISE_CANDIDATS)
+    lignes = []
+    for r in trouvees[seuil][trouvees[seuil]["classe"] != "stable"].itertuples():
+        for x in r.repreneurs.itertuples():
+            lignes.append({"fi": r.fi, "t": r.t, "partie": r.partie, "classe": r.classe,
+                           "deja_repere": r.restructuration_probable, "perte": r.perte, "repreneur": x.fi,
+                           "gain": x.gain, "nouveau_finess": x.nouveau_finess,
+                           "meme_entite_juridique": x.fi_ej == r.fi_ej or x.fi_ej_avant == r.fi_ej,
+                           "fipre_repreneur": ident["fipre"].get((x.fi, r.t + 1)),
+                           "rs": ident["rs"].get((r.fi, r.t)), "rs_repreneur": ident["rs"].get((x.fi, r.t + 1))})
+    trouvees_y1 = pd.DataFrame(lignes)
+    trouvees_y1.to_csv(tableaux / "reprises_trouvees.csv", index=False)
+    u = trouvees_y1.drop_duplicates(["fi", "t"])
+    nouveaux, deja = u[u["deja_repere"] == 0], u[u["deja_repere"] == 1]
+    print(f"\n21. Passages y = 1 avec une reprise (seuil {seuil}) : {len(u)}, dont {len(nouveaux)} pas encore "
+          f"repérés. Repreneur dans la même entité juridique : {int(nouveaux['meme_entite_juridique'].sum())} "
+          f"sur {len(nouveaux)} nouveaux, {int(deja['meme_entite_juridique'].sum())} sur {len(deja)} déjà repérés")
+    print(trouvees_y1.to_string(index=False))
 
 
 if __name__ == "__main__":
