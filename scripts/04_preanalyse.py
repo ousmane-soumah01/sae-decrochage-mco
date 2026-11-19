@@ -42,6 +42,19 @@ un transfert d'activité au sein du même groupe (fi_ej : entité juridique) ?
     retrouvée dans les autres sites du groupe au-delà de leur croissance normale ;
   - finess_qui_changent.csv : sorties suivies d'un nouveau numéro dans le même groupe,
     établissements réapparus après une absence, sites qui changent de groupe.
+
+Question 6 : comment découper les années pour apprendre, valider et tester ?
+(lignes évaluées : y connu, restructurations probables retirées)
+  - lignes_par_passage.csv : lignes évaluées, y = 1 et référence nationale par passage ;
+  - indice_activite_base_2019.csv : activité des établissements actifs les 13 années,
+    quantiles d'un indice 2019 = 100 (creux de 2020 et rattrapage) ;
+  - proportion_test.csv : part des lignes et des y = 1 au test selon 1, 2 ou 3 années de test ;
+  - plis_timeseriessplit.csv : plis de TimeSeriesSplit comparés aux plis par année ;
+  - cases_vides_modele.csv : chaque case vide des lignes évaluées, comparée à la capacité
+    ou à l'activité correspondante ;
+  - sej0_vides_avec_lits.csv : séjours de 0 jour non renseignés alors que l'établissement a
+    des lits dans la discipline (mécanisme d'absence) ;
+  - figure covid_et_test.png.
 """
 
 import sys
@@ -57,16 +70,33 @@ import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+from sklearn.model_selection import TimeSeriesSplit  # noqa: E402
 
 from src.activite import calculer_activite, est_eligible  # noqa: E402
-from src.cible import construire_passages, ecarts_et_decrochages, reference_ponderee  # noqa: E402
+from src.chargement import empiler_table  # noqa: E402
+from src.cible import (  # noqa: E402
+    classer,
+    construire_passages,
+    ecarts_et_decrochages,
+    reference_ponderee,
+    restructurations,
+)
 from src.config import charger_config, chemin_donnees, racine_projet  # noqa: E402
+from src.decoupage import lignes_evaluees, plis_par_annee, separer_test  # noqa: E402
 
 COMPOSANTES = ["jou_mco", "sejhc_mco", "sej0_mco", "sejhp_mco", "sea_mco"]
 POIDS_CANDIDATS = {"1/3": 1 / 3, "1/2": 1 / 2, "1": 1.0}
 SEUILS_CANDIDATS = [0, 365, 1000, 3650]
 TRANCHES = [0, 100, 365, 1000, 3650, float("inf")]
+# Question 6 : candidats examinés (les choix retenus iront dans config.yaml)
+ANNEE_BASE_INDICE = 2019                      # dernière année avant le Covid
+PASSAGES_COVID = [2019, 2020]                 # années t des passages 2019->2020 et 2020->2021
+ANNEES_DE_TEST_CANDIDATES = [1, 2, 3]         # nombre de dernières années t gardées pour le test
+DISCIPLINES = ["med", "chi", "obs", "mco"]
+CAPACITE_ET_ACTIVITE = [("lit", "jou"), ("jli", "jou"), ("pla", "sejhp")]   # capacité vide -> activité ?
+ACTIVITE_ET_CAPACITE = [("jou", "lit"), ("sejhc", "lit"), ("sej0", "lit"), ("sejhp", "pla")]  # et l'inverse
 
 
 def evolutions(panel):
@@ -381,8 +411,150 @@ def main():
     print("\n12. Les FINESS qui changent (toutes années) :")
     print(finess.to_string())
 
+    # --- Question 6 : découpage des années ------------------------------------------
+    question_6(panel, config, tableaux, figures)
+
     print(f"\nTableaux écrits dans {tableaux.relative_to(racine_projet())}, figures dans "
           f"{figures.relative_to(racine_projet())}")
+
+
+def question_6(panel, config, tableaux, figures):
+    """Question 6 : passages Covid, années de test, plis de validation et cases vides."""
+    annees = range(config["donnees"]["annee_debut"], config["donnees"]["annee_fin"] + 1)
+    identite = empiler_table(config, "ID", annees, chemin_donnees(config, "dossier_extraites"))
+    classes = restructurations(classer(construire_passages(panel, config), panel, config),
+                               panel, identite, config)
+    ev = lignes_evaluees(classes, config)
+
+    # 13. Lignes évaluées par passage
+    par_t = ev.groupby("t").agg(lignes=("y", "size"), y1=("y", "sum"))
+    par_t["part_y1_pct"] = 100 * par_t["y1"] / par_t["lignes"]
+    par_t["reference_pct"] = 100 * classes.groupby("t")["reference"].first()
+    ecarts = classes[classes["actif_t1"]].groupby("t")["ecart_points"]
+    par_t["ecart_q10"], par_t["ecart_mediane"], par_t["ecart_q90"] = (
+        ecarts.quantile(0.10), ecarts.median(), ecarts.quantile(0.90))
+    par_t.index = [f"{t}->{t + 1}" for t in par_t.index]
+    par_t.round(2).to_csv(tableaux / "lignes_par_passage.csv")
+    print("\n13. Lignes évaluées par passage (y connu, restructurations probables retirées) :")
+    print(par_t.round(1).to_string())
+
+    # 14. Creux de 2020 et rattrapage : établissements actifs les 13 années, indice base 2019 = 100
+    actifs = panel[panel["activite"] > 0]
+    nb_annees = actifs.groupby("fi")["an"].nunique()
+    toujours = nb_annees[nb_annees == len(annees)].index
+    indice = actifs[actifs["fi"].isin(toujours)].pivot(index="fi", columns="an", values="activite")
+    indice = 100 * indice.div(indice[ANNEE_BASE_INDICE], axis=0)
+    quantiles = indice.quantile([0.10, 0.25, 0.50, 0.75, 0.90]).T
+    quantiles.columns = ["q10", "q25", "mediane", "q75", "q90"]
+    quantiles.round(2).to_csv(tableaux / "indice_activite_base_2019.csv")
+    print(f"\n14. Indice d'activité ({ANNEE_BASE_INDICE} = 100), {len(indice)} établissements actifs "
+          f"les {len(annees)} années :")
+    print(quantiles.round(1).to_string())
+
+    # 15. Part du test selon le nombre de dernières années, passages Covid retirés
+    hors_covid = ev[~ev["t"].isin(PASSAGES_COVID)]
+    annees_t = sorted(hors_covid["t"].unique())
+    lignes = []
+    for k in ANNEES_DE_TEST_CANDIDATES:
+        entrainement, test, _ = separer_test(hors_covid, annees_t[-k:], PASSAGES_COVID)
+        lignes.append({"annees_de_test": k, "annees_t_test": "-".join(map(str, annees_t[-k:])),
+                       "lignes_test": len(test), "part_test_pct": 100 * len(test) / len(hors_covid),
+                       "y1_test": int(test["y"].sum()), "part_y1_test_pct": 100 * test["y"].mean(),
+                       "lignes_entrainement": len(entrainement), "y1_entrainement": int(entrainement["y"].sum()),
+                       "part_y1_entrainement_pct": 100 * entrainement["y"].mean()})
+    proportion = pd.DataFrame(lignes).set_index("annees_de_test")
+    proportion.round(2).to_csv(tableaux / "proportion_test.csv")
+    covid = ev[ev["t"].isin(PASSAGES_COVID)]
+    print(f"\n15. Sans les passages Covid ({len(covid)} lignes, {int(covid['y'].sum())} y = 1) : "
+          f"{len(annees_t)} années, {len(hors_covid)} lignes, {int(hors_covid['y'].sum())} y = 1. Part du test :")
+    print(proportion.round(1).to_string())
+
+    # 16. TimeSeriesSplit (blocs de lignes) contre plis par année, sur l'entraînement à 2 années de test
+    entrainement, _, _ = separer_test(hors_covid, annees_t[-2:], PASSAGES_COVID)
+    a = entrainement.sort_values("t")["t"].to_numpy()
+    lignes = []
+    decoupages = {"TimeSeriesSplit": TimeSeriesSplit(n_splits=len(np.unique(a)) - 1).split(a),
+                  "plis_par_annee": plis_par_annee(a)}
+    for methode, plis in decoupages.items():
+        for numero, (tr, te) in enumerate(plis, 1):
+            validation = pd.Series(a[te]).value_counts().sort_index()
+            lignes.append({"methode": methode, "pli": numero,
+                           "entrainement": f"{a[tr].min()}-{a[tr].max()}", "lignes_entrainement": len(tr),
+                           "validation": " + ".join(f"{n} de {an}" for an, n in validation.items()),
+                           "meme_annee_des_deux_cotes": bool(set(a[tr]) & set(a[te])),
+                           "avenir_dans_l_entrainement": bool(a[tr].max() > a[te].min())})
+    plis_tss = pd.DataFrame(lignes)
+    plis_tss.to_csv(tableaux / "plis_timeseriessplit.csv", index=False)
+    print(f"\n16. Plis sur l'entraînement ({len(a)} lignes) : TimeSeriesSplit contre plis par année :")
+    print(plis_tss.to_string(index=False))
+
+    # 17. Cases vides des lignes évaluées hors Covid (test compris)
+    modele = hors_covid[["fi", "t"]].merge(panel, left_on=["fi", "t"], right_on=["fi", "an"])
+    lignes = []
+    for d in DISCIPLINES:
+        for vide, autre in CAPACITE_ET_ACTIVITE + ACTIVITE_ET_CAPACITE:
+            colonne, reference = f"{vide}_{d}", f"{autre}_{d}"
+            v = modele[colonne].isna()
+            if v.any():
+                r = modele.loc[v, reference]
+                lignes.append({"colonne": colonne, "cases_vides": int(v.sum()),
+                               "pct_lignes": 100 * v.mean(), "comparee_a": reference,
+                               "comparee_positive": int((r > 0).sum()), "comparee_nulle": int((r == 0).sum()),
+                               "comparee_vide": int(r.isna().sum())})
+    vides = pd.DataFrame(lignes).sort_values(["comparee_a", "colonne"])
+    vides.round(2).to_csv(tableaux / "cases_vides_modele.csv", index=False)
+    quantites = [c for c in panel.columns if c.split("_")[0] in
+                 {"lit", "jli", "jou", "sejhc", "sej0", "pla", "sejhp", "sea"}]
+    print(f"\n17. Cases vides des {len(modele)} lignes évaluées hors Covid "
+          f"({int(modele[quantites].isna().any(axis=1).sum())} lignes avec au moins une case vide) :")
+    print(vides.round(2).to_string(index=False))
+
+    # 18. Séjours de 0 jour non renseignés alors que l'établissement a des lits
+    lignes = []
+    for d in DISCIPLINES[:3]:
+        cas = modele[modele[f"sej0_{d}"].isna() & (modele[f"lit_{d}"] > 0)]
+        for _, c in cas.iterrows():
+            historique = panel[(panel["fi"] == c["fi"]) & (panel["an"] != c["an"])]
+            renseigne = historique[historique[f"sej0_{d}"].notna() & (historique[f"sejhc_{d}"] > 0)]
+            lignes.append({"fi": c["fi"], "t": c["an"], "discipline": d, "stjr": c["stjr"], "catr": c["catr"],
+                           "lit": c[f"lit_{d}"], "sejhc": c[f"sejhc_{d}"], "activite": round(c["activite"]),
+                           "autres_annees_sej0_vide": int(historique[f"sej0_{d}"].isna().sum()),
+                           "autres_annees_sej0_renseigne": len(renseigne),
+                           "part_sej0_dans_sejhc_autres_annees_pct":
+                               round(100 * renseigne[f"sej0_{d}"].sum() / renseigne[f"sejhc_{d}"].sum(), 1)
+                               if len(renseigne) else float("nan")})
+    sej0 = pd.DataFrame(lignes)
+    sej0.to_csv(tableaux / "sej0_vides_avec_lits.csv", index=False)
+    print(f"\n18. Séjours de 0 jour non renseignés alors que l'établissement a des lits ({len(sej0)} cases) :")
+    print(sej0.to_string(index=False))
+
+    # Figure : activité nationale, indice des établissements, part de y = 1 par passage
+    nat = panel.groupby("an")[["activite", "jou_mco", "sejhp_mco"]].sum() / 1e6
+    fig, ax = plt.subplots(1, 3, figsize=(17, 4.8))
+    for colonne, nom in [("activite", "activité (journées-équivalentes)"), ("jou_mco", "journées de complète"),
+                         ("sejhp_mco", "venues de partielle")]:
+        ax[0].plot(nat.index, nat[colonne], marker="o", label=nom)
+    ax[0].set_title("France : activité MCO (millions)")
+    ax[1].fill_between(quantiles.index, quantiles["q10"], quantiles["q90"], alpha=.2, label="10 %–90 %")
+    ax[1].fill_between(quantiles.index, quantiles["q25"], quantiles["q75"], alpha=.35, label="25 %–75 %")
+    ax[1].plot(quantiles.index, quantiles["mediane"], marker="o", label="médiane")
+    ax[1].axhline(100, color="grey", lw=.8)
+    ax[1].set_title(f"Établissements actifs les {len(annees)} années (n = {len(indice)}) : "
+                    f"indice {ANNEE_BASE_INDICE} = 100")
+    covid_labels = {f"{t}->{t + 1}" for t in PASSAGES_COVID}
+    ax[2].bar(range(len(par_t)), par_t["part_y1_pct"],
+              color=["tab:red" if s in covid_labels else "tab:blue" for s in par_t.index])
+    ax[2].set_xticks(range(len(par_t)))
+    ax[2].set_xticklabels(par_t.index, rotation=60, fontsize=8)
+    ax[2].set_title("Part de y = 1 par passage (%), passages Covid en rouge")
+    for x in ax[:2]:
+        x.axvspan(2019.5, 2020.5, color="red", alpha=.08)
+        x.legend(fontsize=8)
+    for x in ax:
+        x.grid(alpha=.3)
+    fig.tight_layout()
+    fig.savefig(figures / "covid_et_test.png", dpi=130)
+    plt.close(fig)
 
 
 if __name__ == "__main__":
