@@ -89,12 +89,15 @@ def empreinte(chemin):
 
 
 def version_du_code(racine):
-    """(commit court, code modifié non commité ?) ; (« inconnu », True) si git ne répond pas."""
+    """(commit court, code modifié non commité ?) ; (« inconnu », True) si git ne répond pas.
+
+    Le code, c'est src/, scripts/ et config.yaml : un fichier modifié ou jamais commité y compte.
+    """
     try:
         commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=racine, capture_output=True,
                                 text=True, check=True).stdout.strip()
-        etat = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=racine,
-                              capture_output=True, text=True, check=True).stdout.strip()
+        etat = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all", "--", "src", "scripts",
+                               "config.yaml"], cwd=racine, capture_output=True, text=True, check=True).stdout.strip()
         return commit, bool(etat)
     except (OSError, subprocess.CalledProcessError):
         return "inconnu", True
