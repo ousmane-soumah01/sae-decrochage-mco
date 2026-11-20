@@ -1,0 +1,4 @@
+amas,lignes,y1,y1_pct,activite_mediane,duree_sejour_mediane,part_partielle_mediane,part_chirurgie_mediane,urgences_pct,smr_pct,catr_principales
+"petits établissements de médecine (CP1 < -4, CP2 < 0)",2516,272,10.81,4215.5,13.55,0.0,0.0,4.05,87.24,"PUB2 (1775), PNL4 (257), PLU4 (141)"
+"petites cliniques de chirurgie ambulatoire (CP1 < -1, CP2 > 4)",800,83,10.38,6488.75,3.12,0.77,1.0,1.12,10.12,"PLU4 (724), PNL4 (27), PLU_autres (17)"
+tout l'entraînement,11587,607,5.24,19754.0,5.9,0.27,0.17,43.19,51.71,"PUB2 (5053), PLU4 (3740), PUB1 (1126)"
