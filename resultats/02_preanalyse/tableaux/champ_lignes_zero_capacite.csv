@@ -1,0 +1,48 @@
+fi,t,partie,classe,y,activite_t,capacite_t_moins_1,capacite_t_plus_1,derniere_annee_mco,deja_ferme_en_t,explication
+100000140,2013,entrainement,decrochage,1.0,2361.0,,6.0,2025,False,autre
+830012688,2013,entrainement,decrochage,1.0,3472.5,,0.0,2014,False,autre
+930026885,2021,entrainement,stable,0.0,3134.0,,30.0,2025,False,autre
+600010862,2014,entrainement,stable,0.0,1823.0,45.0,20.0,2024,False,capacité non saisie (lits avant et après)
+140000076,2016,entrainement,decrochage,1.0,3956.5,30.0,1.0,2017,False,capacité non saisie (lits avant et après)
+380000109,2021,entrainement,decrochage,1.0,2471.0,15.0,2.0,2025,False,capacité non saisie (lits avant et après)
+510012040,2021,entrainement,decrochage,1.0,1343.0,28.0,20.0,2025,False,capacité non saisie (lits avant et après)
+970100459,2022,entrainement,stable,0.0,1728.0,15.0,15.0,2025,False,capacité non saisie (lits avant et après)
+760000059,2023,test,decrochage,1.0,1272.5,8.0,15.0,2025,False,capacité non saisie (lits avant et après)
+930150032,2023,test,decrochage,1.0,6642.0,40.0,82.0,2024,False,capacité non saisie (lits avant et après)
+230780199,2013,entrainement,sortie,1.0,1689.0,,,2013,True,fermeture pendant la première année (pas de passage avant)
+310780374,2013,entrainement,sortie,1.0,2782.0,,,2013,True,fermeture pendant la première année (pas de passage avant)
+450000229,2013,entrainement,sortie,1.0,9056.5,,,2013,True,fermeture pendant la première année (pas de passage avant)
+750300907,2013,entrainement,sortie,1.0,1592.0,,,2013,True,fermeture pendant la première année (pas de passage avant)
+770300093,2013,entrainement,sortie,1.0,1758.5,,,2013,True,fermeture pendant la première année (pas de passage avant)
+770300176,2013,entrainement,sortie,1.0,8286.5,,,2013,True,fermeture pendant la première année (pas de passage avant)
+450000278,2014,entrainement,sortie,1.0,1263.0,21.0,,2014,True,passage qui suit une fermeture en cours d'année
+750300220,2014,entrainement,sortie,1.0,2853.0,65.0,,2014,True,passage qui suit une fermeture en cours d'année
+570000091,2015,entrainement,sortie,1.0,2246.0,56.0,,2015,True,passage qui suit une fermeture en cours d'année
+620000117,2015,entrainement,sortie,1.0,1101.0,25.0,,2015,True,passage qui suit une fermeture en cours d'année
+270000532,2016,entrainement,sortie,1.0,1012.0,7.0,,2016,True,passage qui suit une fermeture en cours d'année
+400780284,2016,entrainement,sortie,1.0,1869.5,39.0,,2016,True,passage qui suit une fermeture en cours d'année
+670780162,2016,entrainement,sortie,1.0,13827.5,117.0,,2016,True,passage qui suit une fermeture en cours d'année
+920300670,2016,entrainement,sortie,1.0,1935.0,65.0,,2016,True,passage qui suit une fermeture en cours d'année
+060780665,2018,entrainement,sortie,1.0,2243.5,45.0,,2018,True,passage qui suit une fermeture en cours d'année
+070780408,2018,entrainement,sortie,1.0,1684.5,32.0,,2018,True,passage qui suit une fermeture en cours d'année
+130001258,2018,entrainement,sortie,1.0,3020.0,17.0,,2018,True,passage qui suit une fermeture en cours d'année
+210987608,2018,entrainement,sortie,1.0,1015.0,15.0,,2018,True,passage qui suit une fermeture en cours d'année
+390000214,2018,entrainement,sortie,1.0,6889.5,31.0,,2018,True,passage qui suit une fermeture en cours d'année
+610780199,2018,entrainement,sortie,1.0,1624.0,77.0,,2018,True,passage qui suit une fermeture en cours d'année
+100000157,2019,covid,sortie,1.0,1609.5,88.0,,2019,True,passage qui suit une fermeture en cours d'année
+330780255,2019,covid,sortie,1.0,2763.5,73.0,,2019,True,passage qui suit une fermeture en cours d'année
+440000651,2019,covid,sortie,1.0,1334.5,65.0,,2019,True,passage qui suit une fermeture en cours d'année
+450000237,2019,covid,sortie,1.0,10154.0,116.0,,2019,True,passage qui suit une fermeture en cours d'année
+670000033,2019,covid,sortie,1.0,12304.0,114.0,,2019,True,passage qui suit une fermeture en cours d'année
+780300364,2019,covid,sortie,1.0,5075.5,65.0,,2019,True,passage qui suit une fermeture en cours d'année
+970202321,2019,covid,sortie,1.0,6038.0,65.0,,2019,True,passage qui suit une fermeture en cours d'année
+190000257,2020,covid,sortie,1.0,1818.5,59.0,,2020,True,passage qui suit une fermeture en cours d'année
+400780359,2020,covid,sortie,1.0,3953.5,93.0,,2020,True,passage qui suit une fermeture en cours d'année
+380020388,2021,entrainement,sortie,1.0,5763.0,27.0,,2021,True,passage qui suit une fermeture en cours d'année
+300781465,2022,entrainement,sortie,1.0,1536.5,78.0,,2022,True,passage qui suit une fermeture en cours d'année
+750300410,2022,entrainement,sortie,1.0,3429.5,78.0,,2022,True,passage qui suit une fermeture en cours d'année
+920300761,2022,entrainement,sortie,1.0,14473.0,99.0,,2022,True,passage qui suit une fermeture en cours d'année
+100000082,2024,test,sortie,1.0,2114.5,50.0,,2024,True,passage qui suit une fermeture en cours d'année
+750300592,2024,test,sortie,1.0,3000.0,73.0,,2024,True,passage qui suit une fermeture en cours d'année
+830100103,2024,test,sortie,1.0,8611.0,119.0,,2024,True,passage qui suit une fermeture en cours d'année
+840000400,2024,test,sortie,1.0,3414.5,97.0,,2024,True,passage qui suit une fermeture en cours d'année

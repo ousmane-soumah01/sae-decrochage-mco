@@ -23,11 +23,15 @@ CLES_OBLIGATOIRES = {
                 "separateur_csv", "cle", "tables"],
     "activite": ["colonne_journees_complete", "colonne_venues_partielle",
                  "colonne_sejours_0_jour", "poids_partielle", "poids_sejours_0_jour"],
-    "perimetre": ["seuil_petits_etablissements"],
-    "cible": ["reference", "ecart_points", "sortie_est_un_decrochage", "compensation_min",
-              "retirer_restructurations"],
+    "perimetre": ["seuil_petits_etablissements", "capacite_mco_requise"],
+    "cible": ["reference", "ecart_points", "sortie_est_un_decrochage", "fermeture_en_cours_est_une_sortie",
+              "compensation_min", "reprise", "retirer_restructurations"],
     "decoupage": ["passages_exclus", "annees_test", "annees_min_entrainement"],
 }
+
+# Clés de cible.reprise (reprise des capacités par un autre site).
+CLES_REPRISE = ["active", "perte_min", "part_perte_min", "tolerance_absolue", "tolerance_relative",
+                "candidats_max", "part_activite_min"]
 
 # Références d'évolution que le code sait calculer.
 REFERENCES_CONNUES = {"moyenne_ponderee"}
@@ -73,6 +77,8 @@ def verifier_config(config):
     # 4. Seuil des petits établissements : strictement positif
     if config["perimetre"]["seuil_petits_etablissements"] <= 0:
         raise ValueError("perimetre.seuil_petits_etablissements doit être strictement positif.")
+    if not isinstance(config["perimetre"]["capacite_mco_requise"], bool):
+        raise ValueError("perimetre.capacite_mco_requise doit valoir true ou false.")
 
     # 5. Référence connue
     if config["cible"]["reference"] not in REFERENCES_CONNUES:
@@ -82,6 +88,17 @@ def verifier_config(config):
         raise ValueError("cible.ecart_points doit être strictement positif.")
     if not 0 < config["cible"]["compensation_min"] <= 1:
         raise ValueError("cible.compensation_min doit être dans ]0 ; 1].")
+    if not isinstance(config["cible"]["fermeture_en_cours_est_une_sortie"], bool):
+        raise ValueError("cible.fermeture_en_cours_est_une_sortie doit valoir true ou false.")
+    reprise = config["cible"]["reprise"]
+    manquantes = [cle for cle in CLES_REPRISE if cle not in reprise]
+    if manquantes:
+        raise ValueError(f"cible.reprise : clés manquantes : {manquantes}.")
+    if reprise["perte_min"] <= 0 or reprise["candidats_max"] < 1 or reprise["tolerance_absolue"] < 0:
+        raise ValueError("cible.reprise : perte_min > 0, candidats_max >= 1 et tolerance_absolue >= 0.")
+    for cle in ("part_perte_min", "tolerance_relative", "part_activite_min"):
+        if not 0 <= reprise[cle] <= 1:
+            raise ValueError(f"cible.reprise.{cle} doit être entre 0 et 1.")
 
     # 6. Découpage : années t possibles (la dernière année n'a pas de t+1), test et exclusions séparés
     decoupage = config["decoupage"]

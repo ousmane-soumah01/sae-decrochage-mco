@@ -1,0 +1,472 @@
+---
+title: "ACP normée des lignes d'entraînement"
+output:
+  html_document:
+    theme: null
+    highlight: null
+    self_contained: true
+    mathjax: null
+---
+
+<!--
+Étape 07 (suite) : ACP normée descriptive des lignes d'entraînement (FactoMineR, factoextra).
+
+Lancement, depuis la racine du dépôt (après scripts/05_table_modelisation.py) :
+  Rscript -e "Sys.setenv(RSTUDIO_PANDOC = 'D:/R-4.5.2/RStudio/resources/app/bin/quarto/bin/tools'); rmarkdown::render('scripts/07_acp.Rmd', output_dir = 'resultats/03_exploration', output_file = 'acp_normee.html')"
+Depuis RStudio : bouton « Knit » (RStudio fournit pandoc lui-même).
+Python (pour lire le parquet et la table ID, via reticulate) : variable d'environnement
+RETICULATE_PYTHON, sinon C:/Python314/python.exe.
+
+Lignes : partie « entrainement » de la table de modélisation (le test et les passages Covid ne
+sont jamais regardés ici). L'ACP est descriptive : elle n'est pas utilisée par les modèles
+(sauf en variante « ACP puis modèle », réapprise dans chaque pli, en Python).
+Les commentaires ont été écrits après vérification des chiffres sur la table dont l'empreinte
+est affichée en tête de page ; les nombres cités sont recalculés à chaque rendu.
+-->
+
+```{css, echo = FALSE}
+:root { --fond: #fbfaf7; --texte: #2b2a27; --gris: #6b6a64; --ligne: #e6e5e0; --bleu: #2a78d6; --orange: #eb6834; }
+body { background: var(--fond); color: var(--texte); font: 15px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; }
+.main-container, body > div { max-width: 1180px; margin: 0 auto; padding: 0 16px 80px; }
+h1.title { font-size: 26px; margin: 24px 0 4px; } h1 { font-size: 22px; }
+h2 { font-size: 20px; margin: 36px 0 8px; border-bottom: 1px solid var(--ligne); padding-bottom: 4px; }
+h3 { font-size: 16px; margin: 22px 0 6px; }
+.sous { color: var(--gris); margin: 0 0 18px; }
+img { max-width: 100%; height: auto; display: block; margin: 10px 0; background: white; border: 1px solid var(--ligne); }
+table.t { border-collapse: collapse; font-size: 12.5px; margin: 8px 0 14px; display: block; overflow-x: auto; }
+table.t th, table.t td { padding: 4px 8px; border-bottom: 1px solid var(--ligne); text-align: right; white-space: nowrap; }
+table.t th { background: #f1f0ec; } table.t td:first-child, table.t th:first-child { text-align: left; }
+.encadre { background: white; border-left: 4px solid var(--bleu); padding: 10px 14px; margin: 12px 0; }
+.prudence { border-left-color: var(--orange); }
+details { margin: 6px 0 14px; } summary { cursor: pointer; color: var(--bleu); }
+nav { position: sticky; top: 0; background: var(--fond); padding: 8px 0; border-bottom: 1px solid var(--ligne); font-size: 13px; z-index: 2; }
+nav a { margin-right: 14px; color: var(--bleu); text-decoration: none; }
+pre, code { font-size: 12px; }
+```
+
+```{r preparation, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, fig.align = "left", dpi = 110)
+knitr::opts_knit$set(root.dir = normalizePath(file.path(dirname(knitr::current_input(dir = TRUE)), "..")))
+```
+
+```{r donnees, include = FALSE}
+library(FactoMineR)
+library(factoextra)
+library(ggplot2)
+library(ggrepel)
+library(reticulate)
+use_python(Sys.getenv("RETICULATE_PYTHON", "C:/Python314/python.exe"), required = TRUE)
+
+racine <- getwd()
+chemin_table <- file.path(racine, "donnees", "preparees", "modelisation_mco.parquet")
+empreinte <- unname(tools::md5sum(chemin_table))
+pd <- import("pandas")
+table <- pd$read_parquet(chemin_table)
+e <- table[table$partie == "entrainement", ]
+rownames(e) <- NULL
+py_run_string(sprintf("
+import sys
+sys.path.insert(0, r'%s')
+from src.config import charger_config, chemin_donnees
+from src.chargement import empiler_table
+from src.variables import QUANTITES_MCO, INDICATEURS
+c = charger_config(); d = c['donnees']
+ident = empiler_table(c, 'ID', range(d['annee_debut'], d['annee_fin'] + 1), chemin_donnees(c, 'dossier_extraites'))
+ident['an'] = ident['an'].astype(int)
+raisons = ident.drop_duplicates(['fi', 'an'])[['fi', 'an', 'rs']]
+quantites = list(QUANTITES_MCO)
+indicateurs = list(INDICATEURS)
+", racine))
+raisons <- py$raisons
+cle <- paste(e$fi, e$t)
+e$rs <- raisons$rs[match(cle, paste(raisons$fi, raisons$an))]
+
+# Variables actives : 38 variables continues ; les quantités passent par log(1 + x)
+en_log <- c(py$quantites, "activite", "sites_entite")
+actives <- c(en_log, "taux_occupation_mco", "part_partielle_mco", "duree_moyenne_sejour_mco",
+             "part_journees_med", "part_journees_chi", "part_journees_obs", "part_site_dans_entite")
+plafonnees <- c("taux_occupation_mco", "duree_moyenne_sejour_mco")
+X <- e[, actives]
+vides <- colSums(is.na(X))
+X[en_log] <- lapply(X[en_log], log1p)
+plafonds <- sapply(plafonnees, function(v) unname(quantile(X[[v]], 0.99, na.rm = TRUE, type = 7)))
+for (v in plafonnees) X[[v]] <- pmin(X[[v]], plafonds[[v]])
+X[] <- lapply(X, function(x) { x[is.na(x)] <- median(x, na.rm = TRUE); x })
+moyennes_ok <- max(abs(colMeans(scale(X))))
+
+# Éléments supplémentaires qualitatifs
+inc <- grep("^inc_", names(e), value = TRUE)
+sup <- data.frame(classe = factor(e$classe, levels = c("stable", "decrochage", "sortie")),
+                  stjr = factor(e$stjr), catr = factor(e$catr), region = factor(e$reg_actuelle),
+                  lapply(e[c(py$indicateurs, inc)], function(x) factor(x)))
+sup_brut <- sup
+sup[] <- lapply(names(sup), function(v) factor(paste(v, sup[[v]], sep = ".")))   # modalités nommées « variable.modalité »
+donnees <- cbind(X, sup)
+p <- length(actives); n <- nrow(X)
+acp <- PCA(donnees, scale.unit = TRUE, ncp = p, quali.sup = (p + 1):ncol(donnees), graph = FALSE)   # ncp = p : toutes les valeurs propres
+
+# Orientation des axes (le signe d'un vecteur propre est arbitraire) : la variable la plus
+# corrélée à l'axe est mise du côté positif, comme dans la page de travail
+for (k in seq_len(ncol(acp$var$coord))) {
+  if (acp$var$coord[which.max(abs(acp$var$coord[, k])), k] < 0) {
+    acp$var$coord[, k] <- -acp$var$coord[, k]; acp$var$cor[, k] <- -acp$var$cor[, k]
+    acp$ind$coord[, k] <- -acp$ind$coord[, k]; acp$svd$V[, k] <- -acp$svd$V[, k]; acp$svd$U[, k] <- -acp$svd$U[, k]
+    acp$quali.sup$coord[, k] <- -acp$quali.sup$coord[, k]; acp$quali.sup$v.test[, k] <- -acp$quali.sup$v.test[, k]
+  }
+}
+lam <- acp$eig[, 1]
+K <- 5
+paires <- combn(K, 2)
+couleurs_classes <- c(stable = "#b9b8b2", decrochage = "#2a78d6", sortie = "#eb6834")
+noms_classes <- c(stable = "stables", decrochage = "décrochages", sortie = "sorties")
+f <- function(x, d = 2) formatC(x, format = "f", digits = d, decimal.mark = ",", big.mark = " ")
+tableau <- function(df, d = 2) {
+  df[] <- lapply(df, function(x) if (is.numeric(x)) f(x, d) else x)
+  knitr::kable(df, format = "html", table.attr = 'class="t"', escape = TRUE, row.names = FALSE)
+}
+theme_page <- theme_minimal(base_size = 10) + theme(panel.grid.minor = element_blank(),
+  panel.grid.major = element_line(colour = "#e6e5e0"), plot.title = element_text(size = 10),
+  axis.title = element_text(colour = "#6b6a64"))
+```
+
+<p class="sous">Projet décrochage MCO · `r f(n, 0)` passages d'entraînement, `r p` variables actives · table `r empreinte` · rendu le `r format(Sys.Date(), "%d/%m/%Y")`</p>
+
+<nav><a href="#prep">0. Préparation</a><a href="#axes">1. Nombre d'axes</a><a href="#var">2. Variables</a><a href="#faisceaux">2.4 Faisceaux</a><a href="#ind">3. Individus</a><a href="#lien">4. Lien et classes</a><a href="#retenir">5. À retenir</a></nav>
+
+## 0. Ce qui a été fait avant l'ACP {#prep}
+
+- **Individus** : les `r f(n, 0)` passages évalués de l'entraînement. Ils viennent de `r length(unique(e$fi))` établissements, présents `r median(table(e$fi))` années en médiane : **un même établissement est un individu par année**, et les très grands sites pèsent plusieurs fois (partie 3).
+- **Variables actives** (`r p`) : les 29 quantités MCO, l'activité et le nombre de sites de l'entité, passés par log(1 + x) ; les 6 ratios et la part du site dans son entité. Le taux d'occupation et la durée moyenne de séjour sont plafonnés à leur 99^e^ centile (`r f(plafonds[["taux_occupation_mco"]], 3)` et `r f(plafonds[["duree_moyenne_sejour_mco"]], 1)` jours), pour l'ACP seulement.
+- **Cases vides** remplacées par la médiane, pour l'ACP seulement : `r paste(sprintf("%s (%d)", names(vides[vides > 0]), vides[vides > 0]), collapse = ", ")`.
+- **ACP normée** (`FactoMineR::PCA`, `scale.unit = TRUE`) : chaque variable est centrée et réduite (moyenne au plus `r formatC(moyennes_ok, format = "e", digits = 1)` en valeur absolue après réduction), on diagonalise la matrice des corrélations, la somme des valeurs propres vaut `r f(sum(lam))` (le nombre de variables) et la valeur propre moyenne vaut 1.
+- **Éléments supplémentaires** (ils ne construisent pas les axes) : la classe (stable, décrochage, sortie), le statut, la catégorie, la région, les indicateurs d'offre et d'incohérence.
+
+## 1. Combien d'axes retenir ? {#axes}
+
+```{r valeurs-propres, fig.width = 12, fig.height = 4}
+baton <- sapply(1:p, function(k) sum(1 / (k:p)))
+vp <- data.frame(axe = 1:p, valeur_propre = lam, pct = acp$eig[, 2], cumul = acp$eig[, 3],
+                 ecart = c(-diff(lam), NA), baton = baton)
+g1 <- ggplot(vp[1:15, ], aes(axe, valeur_propre)) + geom_col(fill = "#2a78d6") +
+  geom_line(aes(y = baton), colour = "#6b6a64", linetype = "dashed") + geom_point(aes(y = baton), colour = "#6b6a64", size = 1) +
+  geom_hline(yintercept = 1, colour = "#eb6834") + geom_text(data = vp[1:6, ], aes(label = f(valeur_propre)), vjust = -0.4, size = 3) +
+  labs(title = "Éboulis des valeurs propres (orange : Kaiser = 1 ; pointillé : bâton brisé)", x = "axe", y = NULL) + theme_page
+g2 <- ggplot(vp[1:12, ], aes(factor(axe), ecart, fill = axe <= 5)) + geom_col(show.legend = FALSE) +
+  scale_fill_manual(values = c(`TRUE` = "#2a78d6", `FALSE` = "#b9b8b2")) + geom_text(aes(label = f(ecart)), vjust = -0.4, size = 3) +
+  scale_x_discrete(labels = paste0(1:12, "→", 2:13)) + labs(title = "Écart entre deux valeurs propres successives", x = NULL, y = NULL) + theme_page
+gridExtra::grid.arrange(g1, g2, ncol = 2)
+```
+
+```{r table-vp, results = "asis"}
+tableau(setNames(vp[1:10, ], c("axe", "valeur propre", "% d'inertie", "% cumulé", "écart avec la suivante", "bâton brisé")))
+```
+
+<div class="encadre">
+**Kaiser** : `r sum(lam > 1)` valeurs propres sont supérieures à 1 (la 5^e^ vaut `r f(lam[5])`, la 6^e^ `r f(lam[6])`). Au-delà, chaque axe porte moins qu'une seule variable : c'est du bruit.
+
+**Les écarts** : `r paste(f(vp$ecart[1:5]), collapse = " ; ")`, puis `r paste(f(vp$ecart[6:9]), collapse = " ; ")`. Le premier grand décrochage est entre les axes 1 et 2 (l'effet taille, partie 2). Il y a aussi une rupture à 3, mais les écarts suivants restent nettement au-dessus du niveau du bruit : couper à 3 laisserait deux axes qui ne sont pas du bruit. La pente ne s'aplatit qu'après l'axe 5 : l'écart 5→6 (`r f(vp$ecart[5])`) vaut environ `r round(vp$ecart[5] / mean(vp$ecart[6:9]))` fois les suivants.
+
+**Le bâton brisé**, repère plus sévère, ne garde que `r sum(cumsum(lam > baton) == 1:p)` axes : la 4^e^ valeur propre (`r f(lam[4])`) est sous son seuil (`r f(baton[4])`).
+
+**Décision (21/11/2026) : 5 axes retenus** (`r f(vp$cumul[5], 1)` % de l'inertie). Kaiser et l'aplatissement des écarts s'accordent ; les axes 4 et 5, plus fragiles selon le bâton brisé, sont lus avec prudence.
+</div>
+
+## 2. L'espace des variables (espace dual) {#var}
+
+Chaque variable réduite est un vecteur de norme 1. Sa coordonnée sur un axe est sa **corrélation** avec l'axe ; le carré de cette coordonnée (cos²) est la part de la variable représentée par l'axe ; sur un plan, le cos² est la somme des deux, le carré de la longueur de la flèche. La **contribution** d'une variable à un axe est sa coordonnée au carré divisée par la valeur propre (moyenne : 100 / `r p` = `r f(100 / p, 1)` %).
+
+### 2.1 Qualité de représentation
+
+```{r qualite, fig.width = 10, fig.height = 9}
+cos2 <- acp$var$cos2[, 1:K]
+ordre <- names(sort(rowSums(cos2)))
+q <- data.frame(variable = factor(rep(rownames(cos2), K), levels = ordre), axe = factor(rep(1:K, each = p)), cos2 = as.vector(cos2))
+ggplot(q, aes(cos2, variable, fill = axe)) + geom_col(colour = "white", linewidth = 0.2) +
+  geom_vline(xintercept = 0.5, linetype = "dashed", colour = "#6b6a64") +
+  scale_fill_manual(values = c("#2a78d6", "#eb6834", "#1baf7a", "#8a5cc2", "#d4a72c"), name = "axe") +
+  scale_x_continuous(limits = c(0, 1)) + labs(title = "cos² de chaque variable par axe, cumulés sur les 5 axes", x = NULL, y = NULL) +
+  theme_page + theme(axis.text.y = element_text(size = 7))
+q5 <- rowSums(cos2); q12 <- rowSums(acp$var$cos2[, 1:2])
+mal12 <- sort(q12[q12 < 0.5])
+```
+
+<div class="encadre">
+**Sur les 5 axes**, toutes les variables ont un cos² cumulé d'au moins `r f(min(q5))` ; `r sum(q5 >= 0.8)` sur `r p` dépassent 0,80. Les moins bien représentées : `r paste(sprintf("%s (%s)", names(sort(q5))[1:4], f(sort(q5)[1:4])), collapse = ", ")` ; une part de leur variance reste dans les axes de bruit.
+
+**Sur le plan 1-2**, `r length(mal12)` variables ont un cos² inférieur à 0,5 et **ne doivent pas y être interprétées** : `r paste(sprintf("%s (%s)", names(mal12), f(mal12)), collapse = ", ")`. Elles s'expliquent sur les axes 3 à 5 (voir les plans ci-dessous).
+</div>
+
+### 2.2 Cercles des corrélations : les 10 plans des 5 axes retenus
+
+En bleu, les variables bien représentées sur le plan (cos² ≥ 0,5) ; en gris, les mal représentées, à ne pas interpréter sur ce plan.
+
+```{r cercles, fig.width = 15, fig.height = 30}
+cercle <- function(a, b) {
+  d <- data.frame(variable = rownames(acp$var$coord), x = acp$var$coord[, a], y = acp$var$coord[, b],
+                  qualite = acp$var$cos2[, a] + acp$var$cos2[, b])
+  d$bien <- d$qualite >= 0.5
+  etiq <- d[d$bien, ]
+  ggplot(d) + annotate("path", x = cos(seq(0, 2 * pi, length.out = 200)), y = sin(seq(0, 2 * pi, length.out = 200)), colour = "#6b6a64") +
+    geom_hline(yintercept = 0, colour = "#e6e5e0") + geom_vline(xintercept = 0, colour = "#e6e5e0") +
+    geom_segment(aes(x = 0, y = 0, xend = x, yend = y, colour = bien), arrow = arrow(length = unit(0.12, "cm")), linewidth = 0.4, show.legend = FALSE) +
+    scale_colour_manual(values = c(`TRUE` = "#2a78d6", `FALSE` = "#b9b8b2")) +
+    geom_text_repel(data = etiq, aes(x, y, label = variable), size = 2.3, max.overlaps = 30, segment.colour = "#e6e5e0") +
+    coord_equal(xlim = c(-1.1, 1.1), ylim = c(-1.1, 1.1)) +
+    labs(title = sprintf("Plan %d-%d (%s %% de l'inertie) : %d variables bien représentées", a, b,
+                         f(acp$eig[a, 2] + acp$eig[b, 2], 1), sum(d$bien)),
+         x = sprintf("axe %d (%s %%)", a, f(acp$eig[a, 2], 1)), y = sprintf("axe %d (%s %%)", b, f(acp$eig[b, 2], 1))) + theme_page
+}
+do.call(gridExtra::grid.arrange, c(lapply(seq_len(ncol(paires)), function(j) cercle(paires[1, j], paires[2, j])), ncol = 2))
+```
+
+### 2.3 Contributions des variables aux axes
+
+```{r contributions, fig.width = 18, fig.height = 4.8}
+graphes <- lapply(1:K, function(k) {
+  c10 <- sort(acp$var$contrib[, k], decreasing = TRUE)[1:10]
+  d <- data.frame(variable = factor(names(c10), levels = rev(names(c10))), contribution = c10,
+                  signe = ifelse(acp$var$coord[names(c10), k] > 0, "positive", "négative"))
+  ggplot(d, aes(contribution, variable, fill = signe)) + geom_col(show.legend = FALSE) +
+    scale_fill_manual(values = c(positive = "#2a78d6", `négative` = "#eb6834")) +
+    geom_vline(xintercept = 100 / p, linetype = "dashed", colour = "#6b6a64") +
+    labs(title = sprintf("Axe %d : 10 plus fortes contributions (%%)", k), x = NULL, y = NULL) + theme_page + theme(axis.text.y = element_text(size = 7))
+})
+do.call(gridExtra::grid.arrange, c(graphes, ncol = 5))
+```
+<p class="sous">Bleu : corrélation positive avec l'axe ; orange : négative ; pointillé : contribution moyenne (`r f(100 / p, 1)` %).</p>
+
+<details><summary>Tableau complet : corrélations, cos² et contributions des `r p` variables</summary>
+```{r table-variables, results = "asis"}
+tv <- data.frame(variable = rownames(acp$var$coord), acp$var$coord[, 1:K], q12, q5, acp$var$contrib[, 1:K])
+names(tv) <- c("variable", paste("corr. axe", 1:K), "cos² plan 1-2", "cos² 5 axes", paste0("ctr ", 1:K, " (%)"))
+tableau(tv[order(-tv[["cos² 5 axes"]]), ])
+```
+</details>
+
+```{r axes-mots, include = FALSE}
+co <- acp$var$coord; ct <- acp$var$contrib
+v <- function(nom, k) f(co[nom, k]); w <- function(nom, k) f(ct[nom, k], 1)
+```
+
+<div class="encadre">
+**Axe 1 (`r f(acp$eig[1, 2], 1)` %) : la taille.** Toutes les quantités y sont corrélées positivement (activité `r v("activite", 1)`, lits MCO `r v("lit_mco", 1)`, séjours de complète `r v("sejhc_mco", 1)`, journées de chirurgie `r v("jou_chi", 1)`). Les contributions sont étalées (au plus `r f(max(ct[, 1]), 1)` %) : c'est l'**effet taille** classique d'une ACP sur des quantités, où tout grandit ensemble. Seuls deux ratios s'y opposent, faiblement : la durée moyenne de séjour (`r v("duree_moyenne_sejour_mco", 1)`) et la part des journées de médecine (`r v("part_journees_med", 1)`).
+
+**Axe 2 (`r f(acp$eig[2, 2], 1)` %) : la nature de l'activité, à taille donnée.** Côté positif, la part des journées de chirurgie (`r v("part_journees_chi", 2)`, contribution `r w("part_journees_chi", 2)` %), la part de la partielle (`r v("part_partielle_mco", 2)`, `r w("part_partielle_mco", 2)` %) et les quantités de chirurgie. Côté négatif, la part des journées de médecine (`r v("part_journees_med", 2)`, `r w("part_journees_med", 2)` %), les journées de médecine (`r v("jou_med", 2)`), le taux d'occupation (`r v("taux_occupation_mco", 2)`) et la durée de séjour (`r v("duree_moyenne_sejour_mco", 2)`). L'axe oppose **la médecine en hospitalisation complète, longue et à forte occupation** à **la chirurgie et à l'ambulatoire**.
+
+**Axe 3 (`r f(acp$eig[3, 2], 1)` %) : l'obstétrique.** La part des journées d'obstétrique (`r v("part_journees_obs", 3)`, contribution `r w("part_journees_obs", 3)` %) et toutes les quantités d'obstétrique (lits `r v("lit_obs", 3)`, journées `r v("jou_obs", 3)`).
+
+**Axe 4 (`r f(acp$eig[4, 2], 1)` %) : la place du site dans son entité.** Le nombre de sites de l'entité (`r v("sites_entite", 4)`) contre la part du site dans l'activité de l'entité (`r v("part_site_dans_entite", 4)`) : un petit site d'une grande entité multi-sites.
+
+**Axe 5 (`r f(acp$eig[5, 2], 1)` %) : l'activité médicale ambulatoire d'un site autonome.** Les venues et places de médecine (`r v("sejhp_med", 5)` et `r v("pla_med", 5)`), la part de la partielle (`r v("part_partielle_mco", 5)`), la part du site dans son entité (`r v("part_site_dans_entite", 5)`) contre le nombre de sites (`r v("sites_entite", 5)`). C'est l'axe le plus fragile (bâton brisé).
+</div>
+
+### 2.4 Les faisceaux de variables {#faisceaux}
+
+Un **faisceau** est un groupe de variables dont les flèches pointent dans la même direction : elles sont fortement corrélées entre elles et portent la même information. Deux faisceaux à angle droit sont décorrélés. Pour les repérer sans se fier à l'œil, on regroupe les variables selon leur corrélation sur les 5 axes retenus (classification ascendante hiérarchique, distance 1 − corrélation entre les vecteurs reconstruits sur 5 axes, saut de Ward).
+
+```{r faisceaux, fig.width = 12, fig.height = 5}
+V5 <- co[, 1:K]
+corr5 <- (V5 %*% t(V5)) / sqrt(rowSums(V5^2) %o% rowSums(V5^2))
+arbre <- hclust(as.dist(1 - corr5), method = "ward.D2")
+groupes <- cutree(arbre, k = 6)
+plot(arbre, main = "Faisceaux de variables (corrélations reconstruites sur les 5 axes)", xlab = "", sub = "", cex = 0.6, ylab = "")
+rect.hclust(arbre, k = 6, border = "#2a78d6")
+```
+
+```{r faisceaux-table, results = "asis"}
+fx <- do.call(rbind, lapply(sort(unique(groupes)), function(g) {
+  m <- names(groupes)[groupes == g]
+  centre <- colMeans(V5[m, , drop = FALSE])
+  data.frame(faisceau = g, variables = paste(m, collapse = ", "), n = length(m),
+             `axe dominant` = which.max(abs(centre)), `corr. moyenne interne` = mean(corr5[m, m][upper.tri(corr5[m, m])]),
+             check.names = FALSE)
+}))
+fx$`corr. moyenne interne`[is.na(fx$`corr. moyenne interne`)] <- 1
+tableau(fx)
+```
+
+```{r faisceaux-mots, include = FALSE}
+groupe_de <- function(var) groupes[[var]]
+nb <- function(var) fx$n[fx$faisceau == groupe_de(var)]
+ci_ <- function(var) f(fx$`corr. moyenne interne`[fx$faisceau == groupe_de(var)])
+r_entite <- corr5["sites_entite", "part_site_dans_entite"]
+```
+
+<div class="encadre">
+**Trois faisceaux de quantités, tous tournés vers la droite de l'axe 1 (la taille)** : la médecine et les totaux, avec l'activité (`r nb("activite")` variables, corrélation interne moyenne `r ci_("activite")`) ; la chirurgie et l'ambulatoire (`r nb("lit_chi")` variables, `r ci_("lit_chi")`) ; l'obstétrique (`r nb("lit_obs")` variables, `r ci_("lit_obs")`). Ils grandissent ensemble avec la taille ; ce qui les distingue, c'est l'axe 2 (médecine contre chirurgie et ambulatoire) et l'axe 3 (obstétrique).
+
+**Un faisceau de la médecine longue** : le taux d'occupation, la durée moyenne de séjour et la part des journées de médecine (`r nb("taux_occupation_mco")` variables, `r ci_("taux_occupation_mco")`). Son axe dominant est l'axe 2 : c'est le pôle opposé au faisceau de la chirurgie et de l'ambulatoire.
+
+**La place dans l'entité** : le nombre de sites de l'entité et la part du site dans son entité restent chacun seuls, parce qu'ils sont **opposés** (corrélation `r f(r_entite)` sur les 5 axes) : la distance 1 − corrélation sépare deux variables de sens contraire, qui portent la même information. Ils sont presque à angle droit du plan 1-2 (cos² au plus `r f(max(q12[c("sites_entite", "part_site_dans_entite")]))`) : ils portent une information que la taille et la nature de l'activité ne contiennent pas (axe 4).
+</div>
+
+## 3. Les individus (espace direct) {#ind}
+
+La **contribution** d'un passage à un axe est sa coordonnée au carré divisée par n × valeur propre (moyenne : 100 / `r f(n, 0)` = `r f(100 / n, 3)` %). Son **cos²** sur un axe est sa coordonnée au carré divisée par sa distance au centre au carré.
+
+```{r concentration, fig.width = 8, fig.height = 4.2}
+ci <- acp$ind$contrib[, 1:K]
+cc <- do.call(rbind, lapply(1:K, function(k) { s <- sort(ci[, k], decreasing = TRUE)
+  data.frame(axe = factor(k), part_ind = 100 * seq_along(s) / n, part_axe = cumsum(s)) }))
+ggplot(cc, aes(part_ind, part_axe, colour = axe)) + geom_line() + geom_abline(slope = 1, linetype = "dotted", colour = "#6b6a64") +
+  coord_cartesian(xlim = c(0, 20), ylim = c(0, 80)) +
+  scale_colour_manual(values = c("#2a78d6", "#eb6834", "#1baf7a", "#8a5cc2", "#d4a72c")) +
+  labs(title = "Concentration des contributions des individus (les 20 % les plus contributifs)",
+       x = "part des individus, les plus contributifs d'abord (%)", y = "part de l'axe (%)") + theme_page
+conc <- data.frame(axe = 1:K, max = apply(ci, 2, max), dix = apply(ci, 2, function(x) sum(sort(x, decreasing = TRUE)[1:10])),
+                   un_pc = apply(ci, 2, function(x) sum(sort(x, decreasing = TRUE)[1:(n %/% 100)])),
+                   au_dessus = apply(ci, 2, function(x) sum(x > 10 * 100 / n)))
+```
+
+```{r table-concentration, results = "asis"}
+tableau(setNames(conc, c("axe", "contribution max (%)", "10 premiers (%)", "1 % des individus (%)", "nb > 10 × moyenne")), 3)
+```
+
+<div class="encadre">
+**Aucun passage ne domine un axe** : la plus forte contribution est de `r f(max(conc$max), 2)` %.
+
+**Les axes 1 et 2 sont construits par toute la population** : les 10 premiers passages en font `r f(conc$dix[1])` % et `r f(conc$dix[2])` %, le 1 % le plus contributif `r f(conc$un_pc[1], 1)` % et `r f(conc$un_pc[2], 1)` %.
+
+**Les axes 3 à 5 sont construits par des groupes spécialisés** : le 1 % le plus contributif en fait `r paste(f(conc$un_pc[3:5], 0), collapse = " %, ")` %. Le tableau ci-dessous montre lesquels : des maternités (axe 3), des petits sites de CHU multi-sites (axe 4), des centres d'endoscopie autonomes (axe 5).
+
+**Attention aux années répétées** : un même établissement contribue à chaque année où il est présent ; le tableau ne garde que l'année la plus contributive de chaque établissement.
+</div>
+
+```{r table-tops, results = "asis"}
+tops <- do.call(rbind, lapply(1:K, function(k) {
+  o <- order(-ci[, k]); o <- o[!duplicated(e$fi[o])][1:5]
+  data.frame(axe = k, FINESS = e$fi[o], `établissement (année)` = sprintf("%s (%d)", e$rs[o], e$t[o]),
+             `années présentes` = as.integer(table(e$fi)[e$fi[o]]), classe = e$classe[o],
+             coordonnée = acp$ind$coord[o, k], `ctr (%)` = ci[o, k], `cos²` = acp$ind$cos2[o, k], check.names = FALSE)
+}))
+tableau(tops, 3)
+```
+
+### 3.1 Qualité de représentation des individus
+
+```{r qualite-individus, include = FALSE}
+q12i <- rowSums(acp$ind$cos2[, 1:2]); d2 <- acp$ind$dist^2
+```
+
+<div class="encadre">
+Sur le plan 1-2, le cos² des passages a pour médiane `r f(median(q12i))` (premier décile `r f(quantile(q12i, 0.1))`, dernier décile `r f(quantile(q12i, 0.9))`) : **`r f(100 * mean(q12i < 0.5), 0)` % des passages ont un cos² inférieur à 0,5** et ne doivent pas être interprétés sur ce plan. Les décrochages et les sorties sont mieux représentés que les stables (cos² médian `r f(median(q12i[e$classe != "stable"]))` contre `r f(median(q12i[e$classe == "stable"]))`).
+
+La distance au centre au carré vaut `r f(mean(d2), 1)` en moyenne (le nombre de variables), `r f(median(d2), 1)` en médiane, et jusqu'à `r f(max(d2), 0)` : une minorité de passages très excentrés, les plus grands et les plus spécialisés.
+</div>
+
+### 3.2 ACP de contrôle
+
+Les passages dont la contribution dépasse 10 fois la moyenne sur l'un des axes 1 à 3 deviennent supplémentaires, et l'ACP est refaite sans eux.
+
+```{r controle, results = "asis"}
+gros <- apply(acp$ind$contrib[, 1:3] > 10 * 100 / n, 1, any)
+acp2 <- PCA(X[!gros, ], scale.unit = TRUE, ncp = K, graph = FALSE)
+corr_vecteurs <- sapply(1:K, function(k) abs(cor(acp$svd$V[, k], acp2$svd$V[, k])))
+tableau(data.frame(axe = 1:K, `valeur propre (ACP complète)` = lam[1:K], `valeur propre (contrôle)` = acp2$eig[1:K, 1],
+                   `|corrélation des vecteurs propres|` = corr_vecteurs, check.names = FALSE), 3)
+```
+
+<div class="encadre">
+`r sum(gros)` passages retirés. **Les axes tiennent** : les valeurs propres changent à peine et les vecteurs propres restent corrélés à au moins `r f(min(corr_vecteurs), 3)` avec ceux de l'ACP complète. Les axes ne sont pas créés par quelques établissements atypiques.
+</div>
+
+## 4. Le lien entre les deux espaces, et les classes {#lien}
+
+### 4.1 Les individus : les 10 plans des 5 axes retenus
+
+Les stables sont dessinés d'abord, petits et pâles ; les décrochages et les sorties par-dessus. Les croix sont les centres de gravité des trois classes.
+
+```{r plans-individus, fig.width = 15, fig.height = 30}
+F <- acp$ind$coord
+bary <- acp$quali.sup$coord[paste0("classe.", c("stable", "decrochage", "sortie")), ]
+rownames(bary) <- c("stable", "decrochage", "sortie")
+plan <- function(a, b) {
+  d <- data.frame(x = F[, a], y = F[, b], classe = factor(e$classe, levels = names(couleurs_classes)))
+  d <- d[order(d$classe != "stable"), ]
+  db <- data.frame(x = bary[, a], y = bary[, b], classe = rownames(bary))
+  ggplot(d, aes(x, y, colour = classe)) +
+    geom_point(aes(size = classe, alpha = classe), stroke = 0) +
+    scale_size_manual(values = c(stable = 0.4, decrochage = 0.9, sortie = 0.9), guide = "none") +
+    scale_alpha_manual(values = c(stable = 0.35, decrochage = 0.85, sortie = 0.85), guide = "none") +
+    geom_point(data = db, aes(x, y, fill = classe), shape = 23, size = 3.5, colour = "black", show.legend = FALSE) +
+    scale_colour_manual(values = couleurs_classes, labels = noms_classes, name = NULL) +
+    scale_fill_manual(values = c(stable = "#6b6a64", decrochage = "#2a78d6", sortie = "#eb6834")) +
+    guides(colour = guide_legend(override.aes = list(size = 3, alpha = 1))) +
+    labs(title = sprintf("Individus, plan %d-%d", a, b), x = sprintf("axe %d (%s %%)", a, f(acp$eig[a, 2], 1)),
+         y = sprintf("axe %d (%s %%)", b, f(acp$eig[b, 2], 1))) + theme_page + theme(legend.position = "top")
+}
+do.call(gridExtra::grid.arrange, c(lapply(seq_len(ncol(paires)), function(j) plan(paires[1, j], paires[2, j])), ncol = 2))
+```
+
+```{r trainees, include = FALSE}
+zero <- function(v) is.na(e[[v]]) | e[[v]] == 0
+med_seule <- zero("jou_chi") & zero("sejhp_chi") & zero("jou_obs") & zero("sejhp_obs") & zero("pla_mco")
+ms <- e[med_seule, ]
+r13 <- cor(F[med_seule, 1], F[med_seule, 3]); r14 <- cor(F[med_seule, 1], F[med_seule, 4])
+r13_autres <- cor(F[!med_seule, 1], F[!med_seule, 3])
+part_decrochages <- sum(med_seule & e$classe == "decrochage") / sum(e$classe == "decrochage")
+```
+
+<div class="encadre">
+**Les traînées droites des plans 1-3 et 1-4.** Beaucoup de décrochages s'alignent sur des droites. Ce sont des **établissements de médecine seule** : ni chirurgie, ni obstétrique, ni place de partielle (`r f(nrow(ms), 0)` passages, dont `r f(100 * mean(ms$y), 1)` % de y = 1, contre `r f(100 * mean(e$y), 1)` % sur tout l'entraînement ; ils regroupent `r f(100 * part_decrochages, 0)` % des décrochages). Leurs journées et leurs venues de chirurgie et d'obstétrique valent 0 : ces colonnes sont identiques d'un établissement à l'autre, et seules leurs quantités de médecine varient, surtout avec la taille. Leurs points ne bougent donc presque que dans une seule direction : sur ce groupe, la corrélation entre les axes 1 et 3 vaut `r f(r13)` (et `r f(r14)` entre les axes 1 et 4), contre `r f(r13_autres)` pour les autres passages. Une traînée n'est donc pas un phénomène caché : c'est la trace géométrique de beaucoup de zéros identiques.
+
+<p class="prudence">Pour les modèles, ce groupe compte : il réunit une part importante des décrochages, et c'est le premier amas du plan 1-2 (petits établissements de médecine). Un modèle fondé sur des distances (k plus proches voisins) verra ces passages très proches les uns des autres, quelle que soit leur classe.</p>
+</div>
+
+### 4.2 Les modalités supplémentaires
+
+```{r modalites, fig.width = 9, fig.height = 7}
+qs <- data.frame(nom = rownames(acp$quali.sup$coord), acp$quali.sup$coord[, 1:K], check.names = FALSE)
+qs$variable <- sub("\\..*$", "", qs$nom)
+choix <- qs[qs$variable %in% c("classe", "stjr", "catr", "a_urgences", "a_pediatrie", "a_smr", "a_geriatrie", "a_unv"), ]
+choix$groupe <- ifelse(choix$variable == "classe", "classe", ifelse(choix$variable %in% c("stjr", "catr"), "statut et catégorie", "offre"))
+ggplot(choix, aes(Dim.1, Dim.2, colour = groupe, label = nom)) + geom_hline(yintercept = 0, colour = "#e6e5e0") + geom_vline(xintercept = 0, colour = "#e6e5e0") +
+  geom_point() + geom_text_repel(size = 2.6, max.overlaps = 40, show.legend = FALSE) +
+  scale_colour_manual(values = c(classe = "#eb6834", `statut et catégorie` = "#2a78d6", offre = "#1baf7a"), name = NULL) +
+  labs(title = "Modalités supplémentaires (centres de gravité), plan 1-2", x = sprintf("axe 1 (%s %%)", f(acp$eig[1, 2], 1)),
+       y = sprintf("axe 2 (%s %%)", f(acp$eig[2, 2], 1))) + theme_page + theme(legend.position = "top")
+```
+
+```{r table-supplementaires, results = "asis"}
+eff <- sapply(rownames(acp$quali.sup$coord), function(nm) sum(as.character(sup[[sub("\\..*$", "", nm)]]) == nm))
+ts <- data.frame(modalité = rownames(acp$quali.sup$coord), effectif = eff, acp$quali.sup$coord[, 1:K], acp$quali.sup$v.test[, 1:K], check.names = FALSE)
+names(ts)[3:(2 + 2 * K)] <- c(paste("coord.", 1:K), paste("v-test", 1:K))
+garde <- sub("\\..*$", "", ts$modalité) %in% c("classe", "stjr", "a_urgences", "a_pediatrie", "a_smr", "a_geriatrie", "a_unv", "inc_occupation_superieure_a_1_5")
+tableau(ts[garde, ])
+```
+
+<details><summary>Catégories d'établissement et régions en supplémentaire</summary>
+```{r table-catr, results = "asis"}
+tableau(ts[sub("\\..*$", "", ts$modalité) %in% c("catr", "region"), 1:(2 + 3)])
+```
+</details>
+
+```{r classes-mots, include = FALSE}
+b <- function(cl, k) f(acp$quali.sup$coord[paste0("classe.", cl), k])
+vt <- function(cl, k) f(acp$quali.sup$v.test[paste0("classe.", cl), k], 1)
+cy <- sapply(1:K, function(k) cor(e$y, F[, k]))
+m <- function(nom, k) f(acp$quali.sup$coord[nom, k])
+```
+
+<div class="encadre">
+**Les classes** : le centre de gravité des décrochages est à (`r b("decrochage", 1)` ; `r b("decrochage", 2)` ; `r b("decrochage", 3)`) sur les axes 1 à 3, celui des sorties à (`r b("sortie", 1)` ; `r b("sortie", 2)` ; `r b("sortie", 3)`), celui des stables près de l'origine. Les valeurs-tests sont `r vt("decrochage", 1)` et `r vt("sortie", 1)` sur l'axe 1, puis `r vt("decrochage", 2)` et `r vt("sortie", 2)` sur l'axe 2. La corrélation de y avec les axes vaut `r paste(sprintf("axe %d : %s", 1:K, f(cy, 3)), collapse = " ; ")`.
+
+**Lecture** : les décrochages et les sorties sont d'abord des **petits établissements** (axe 1). Les sorties penchent en plus vers la **chirurgie et l'ambulatoire** (axe 2) et un peu vers l'obstétrique (axe 3). Au-delà de la taille, le lien de y avec les axes est faible.
+
+<p class="prudence">Avec plus de 11 000 passages, une valeur-test dépasse 2 presque à coup sûr. C'est la **taille des coordonnées** qui compte : seul l'écart sur l'axe 1 est grand (environ `r f(-acp$quali.sup$coord["classe.decrochage", 1] / sqrt(lam[1]), 1)` écart-type de l'axe pour les décrochages).</p>
+
+**Statut et catégorie** : l'axe 2 sépare aussi le **privé lucratif** (`r m("stjr.2", 2)`, catégorie PLU4 `r m("catr.PLU4", 2)`) du **public** (`r m("stjr.1", 2)`, centres hospitaliers PUB2 `r m("catr.PUB2", 2)`). Les CHU et CHR (PUB1) sont à droite sur l'axe 1 (`r m("catr.PUB1", 1)`). Les petites catégories regroupées (PLU_autres, PNL_autres) sont très à gauche (`r m("catr.PLU_autres", 1)` et `r m("catr.PNL_autres", 1)`).
+
+**Offre** : avoir des urgences (`r m("a_urgences.1", 1)`) ou de la pédiatrie (`r m("a_pediatrie.1", 1)`) place un passage à droite sur l'axe 1, du côté des gros établissements ; avoir du SMR le place à gauche et vers la médecine (`r m("a_smr.1", 1)` ; `r m("a_smr.1", 2)`).
+</div>
+
+## 5. Ce que j'en retiens, avec prudence {#retenir}
+
+<div class="encadre">
+1. La variance des établissements est d'abord une affaire de **taille** (`r f(acp$eig[1, 2], 0)` %), puis de **nature d'activité** (`r f(acp$eig[2, 2], 0)` %), d'**obstétrique** (`r f(acp$eig[3, 2], 0)` %) et de **place dans l'entité** (`r f(acp$eig[4, 2], 0)` %).
+2. Les y = 1 se distinguent surtout sur l'axe de la taille, ce qu'exploite déjà la règle naïve. Les autres axes ne les séparent que faiblement. **Un modèle devra tirer son gain de combinaisons que l'ACP, linéaire et faite pour la variance, ne montre pas** : interactions, effets de seuil, indicateurs.
+3. Les classes se recouvrent largement dans tous les plans : la séparation sera difficile, et la PR-AUC à attendre reste modeste.
+4. Pour les k plus proches voisins, travailler sur 5 composantes plutôt que sur `r p` variables a du sens (fléau de la dimension) : c'est la variante « ACP puis k voisins », réapprise dans chaque pli, en Python, avec la logistique pour comparaison.
+
+<p class="prudence">**Limites** : un individu par année (les grands établissements comptent plusieurs fois) ; cases vides remplacées par la médiane et deux ratios plafonnés, pour l'ACP seulement ; ACP linéaire, qui décrit la variance et non la séparation des classes.</p>
+</div>

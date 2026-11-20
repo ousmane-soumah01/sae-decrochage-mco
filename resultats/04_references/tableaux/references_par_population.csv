@@ -1,0 +1,4 @@
+population,pr_auc,pr_auc_hasard,roc_auc,brier,brier_hasard,plis_pr_auc_au_dessus_du_hasard,plis_roc_au_dessus_de_0_5,plis
+toutes,0.1328,0.0521,0.752,0.0478,0.0494,7,7,7
+decrochages,0.1126,0.0462,0.7442,,,7,7,7
+sorties,0.045,0.0064,0.7902,,,7,7,7

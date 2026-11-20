@@ -1,0 +1,6 @@
+classe_rapport,covid,entrainement,test,total
+arrêt du MCO (activité SMR ensuite),5,23,3,31
+décrochage,234,542,126,902
+fermeture (absent de la SAE),14,41,10,65
+"fermeture ou arrêt du MCO (dans la SAE, sans SMR)",0,1,4,5
+total,253,607,143,1003

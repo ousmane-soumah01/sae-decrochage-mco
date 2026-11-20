@@ -25,6 +25,16 @@ def test_lignes_evaluees_retire_inconnues_et_restructurations(config):
     assert list(lignes_evaluees(classes_exemple(), config)["fi"]) == ["a", "b"]
 
 
+def test_lignes_evaluees_retire_les_sites_sans_capacite_mco_en_t(config):
+    # e : décrochage sans lit ni place MCO en t (fermé pendant t, ou capacité non saisie) : hors champ
+    classes = pd.concat([classes_exemple(), pd.DataFrame({"fi": ["e"], "t": [2014], "y": [1],
+                                                          "restructuration_probable": [0]})], ignore_index=True)
+    classes["sans_capacite_mco_t"] = [0, 0, 0, 0, 1]
+    assert list(lignes_evaluees(classes, config)["fi"]) == ["a", "b"]
+    config["perimetre"]["capacite_mco_requise"] = False
+    assert list(lignes_evaluees(classes, config)["fi"]) == ["a", "b", "e"]
+
+
 def test_lignes_evaluees_garde_restructurations_si_demande(config):
     config["cible"]["retirer_restructurations"] = False
     assert list(lignes_evaluees(classes_exemple(), config)["fi"]) == ["a", "b", "d"]

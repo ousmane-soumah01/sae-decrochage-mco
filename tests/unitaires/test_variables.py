@@ -13,6 +13,8 @@ from src.variables import (
     CATEGORIELLES,
     INDICATEURS,
     QUANTITES_MCO,
+    REGIONS_OUTRE_MER,
+    REGROUPEMENT_CATR,
     VARIABLES_INTERDITES,
     indicateur,
     ratio,
@@ -99,8 +101,31 @@ def test_variables_explicatives_garde_les_categorielles_en_texte_et_sans_fuite()
     verifier_sans_fuite([c for c in v.columns if c not in ("fi", "an")])   # ne lève rien
 
 
-@pytest.mark.parametrize("colonne", ["activite_t1", "restructuration_probable", "changement_de_groupe", "fi_ej"])
+@pytest.mark.parametrize("colonne", ["activite_t1", "restructuration_probable", "changement_de_groupe", "fi_ej",
+                                     "reprise_capacites", "reprise_meme_ej", "fermeture_en_cours",
+                                     "sans_capacite_mco_t"])
 def test_verifier_sans_fuite_refuse_une_colonne_interdite(colonne):
     assert colonne in VARIABLES_INTERDITES
     with pytest.raises(ValueError, match=colonne):
         verifier_sans_fuite(["jou_mco", colonne])
+
+
+def test_occupation_impossible_au_dela_de_1_5():
+    p = panel_trois_sites()
+    p["jou_mco"] = [1_600.0, 300.0, 1000.0]          # A : 1 600 / 1 000 = 1,6 ; B : 0,5 ; C : pas de jli
+    v = variables_explicatives(p).set_index("fi")
+    assert v["inc_occupation_superieure_a_1_5"].to_dict() == {"A": 1, "B": 0, "C": 0}
+
+
+def test_modalites_rares_regroupees():
+    p = panel_trois_sites()
+    p["catr"], p["reg_actuelle"] = ["PUB10", "PLU7", "PNL4"], ["03", "76", "06"]
+    v = variables_explicatives(p).set_index("fi")
+    assert v["catr"].to_dict() == {"A": "PUB_autres", "B": "PLU_autres", "C": "PNL4"}
+    assert v["reg_actuelle"].to_dict() == {"A": "outre_mer", "B": "76", "C": "outre_mer"}
+
+
+def test_regroupements_par_statut_et_outre_mer_complets():
+    # Chaque groupe garde le préfixe du statut ; les cinq régions d'outre-mer sont là.
+    assert all(groupe.startswith(code[:3]) for code, groupe in REGROUPEMENT_CATR.items())
+    assert sorted(REGIONS_OUTRE_MER) == ["01", "02", "03", "04", "06"]

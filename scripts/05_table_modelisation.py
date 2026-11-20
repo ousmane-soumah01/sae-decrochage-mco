@@ -4,7 +4,8 @@ Lancement, depuis la racine du dépôt (après scripts/03_panel.py) :
     python scripts/05_table_modelisation.py
 
 Chaque ligne est un passage t -> t+1 dont la cible est connue et qui n'est pas une
-restructuration probable (src.decoupage.lignes_evaluees) : fi, t, y, la partie
+restructuration probable (src.decoupage.lignes_evaluees) : fi, t, y, la classe (stable,
+decrochage ou sortie : pour évaluer à part décrochages et sorties ; jamais une variable), la partie
 (entrainement, test ou covid, selon config.yaml › decoupage) et les variables connues en t
 (src.variables.variables_explicatives). Décisions : docs/decisions.md.
 Trois vérifications (le script s'arrête si l'une échoue) :
@@ -51,7 +52,7 @@ def main():
     identite = empiler_table(config, "ID", annees, chemin_donnees(config, "dossier_extraites"))
     classes = restructurations(classer(construire_passages(panel, config), panel, config),
                                panel, identite, config)
-    evalues = lignes_evaluees(classes, config)[["fi", "t", "y"]]
+    evalues = lignes_evaluees(classes, config)[["fi", "t", "y", "classe"]]
 
     # 2. Partie de chaque passage, selon l'année t
     entrainement, test, covid = separer_test(evalues, decoupage["annees_test"], decoupage["passages_exclus"])
