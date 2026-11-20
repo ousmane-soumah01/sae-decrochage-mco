@@ -187,7 +187,7 @@ Les valeurs de remplacement sont calculées dans chaque pli, sur l'entraînement
 | ROC-AUC | 0,5 | classer un décrocheur avant un non-décrocheur |
 | Brier | prédiction constante égale à la part de y = 1 | qualité des probabilités |
 
-Une règle naïve simple, à définir avec les modèles, sert d'adversaire plus dur que le hasard.
+Une règle naïve simple sert d'adversaire plus dur que le hasard : l'activité seule (E002, section « Journal des expériences »).
 
 **Restent ouverts**
 - Moyenne pour choisir le modèle : les 7 plis (`decoupage.annees_min_entrainement: 1`), ou les 5 plis qui ont au moins 3 années d'entraînement (validation sur 2016, 2017, 2018, 2021, 2022). Avec une seule année d'entraînement, le modèle gagnant est souvent le plus simple ; compter ces plis tire le choix vers des modèles faits pour peu de données. Les 7 plis sont calculés dans tous les cas (courbe d'apprentissage).
@@ -217,6 +217,29 @@ La meilleure variable seule est l'activité (AUC 0,762) ; les 15 premières sont
 
 **Décrochages et sorties évalués à part** *(validé le 19/11/2026)*
 La taille sépare mieux les sorties que les décrochages : AUC de l'activité seule 0,812 pour les sorties contre les stables, 0,756 pour les décrochages contre les stables. Avant la règle de champ, les indicateurs d'incohérence annonçaient surtout des sorties (`inc_lits_zero_avec_journees` : 28 lignes, dont 18 sorties) : c'étaient des fermetures déjà faites en t ; il en reste 6 lignes, dont 1 sortie. Les urgences et la pédiatrie protègent presque totalement d'une sortie (2 sorties sur 5 005 lignes avec urgences, aucune sur 2 492 avec pédiatrie). Un score global peut donc paraître bon en ne trouvant que des sorties : chaque score est aussi donné pour les décrochages seuls et pour les sorties seules.
+
+## Journal des expériences
+
+**Chaque essai de modèle est enregistré, même décevant** *(validé le 20/11/2026)*
+Pourquoi : l'honnêteté (le rapport dira combien d'essais ont précédé le choix du modèle), la reproductibilité (chaque score dit avec quel code, quelles données et quels réglages il a été obtenu) et la comparaison (tous les modèles sur les mêmes plis, contre les mêmes références). Fonctions : `src/evaluation.py` ; références : `scripts/08_references.py`.
+Ce qui est enregistré, dans `resultats/05_modeles/` :
+- `journal_experiences.csv`, une ligne par expérience : identifiant (E001, E002… jamais réutilisé), date, commit du code, « code modifié non commité », empreinte md5 de la table de modélisation, modèle, réglages (JSON), préparation, graine, moyennes de la PR-AUC, de la ROC-AUC et du Brier sur les 7 plis et sur les 5 plis d'au moins 3 années d'entraînement (le point resté ouvert : les deux sont gardées), commentaire ;
+- `scores_par_pli.csv`, une ligne par expérience, pli et population, avec les niveaux du hasard du pli ;
+- `parametres/<id>.json` : les paramètres appris pli par pli (coefficients, importances). Les modèles eux-mêmes ne sont pas versionnés, sauf le modèle final.
+Règles : on ajoute, on n'efface ni ne remplace jamais (un identifiant déjà pris est refusé ; relancer un script ne recalcule pas une expérience déjà enregistrée). Le test n'y entre jamais : `evaluer_par_pli` refuse toute ligne qui n'est pas de l'entraînement ; le test final aura son propre dossier (`resultats/06_test/`), utilisé une seule fois. Un code modifié ou jamais commité (`src/`, `scripts/`, `config.yaml`) est signalé : l'expérience est gardée comme essai, mais seules les expériences faites avec un code commité servent à choisir le modèle et comptent dans le rapport.
+Trois populations, pli par pli : toutes les lignes ; les décrochages contre les stables ; les sorties contre les stables. PR-AUC et ROC-AUC pour les trois ; Brier pour « toutes » seulement : le modèle prédit la probabilité d'un y = 1 quelconque (environ 5 %), la comparer aux seules sorties (0,6 % de leur population) n'aurait pas de sens.
+
+**Les références à battre : E001 le hasard, E002 la règle naïve** *(validé le 20/11/2026)*
+E001 : une probabilité constante, égale à la part de y = 1 de l'entraînement du pli. Sa PR-AUC vaut exactement la part de y = 1 de l'année validée, et sa ROC-AUC 0,5 : c'est aussi la vérification de la mécanique (plis, métriques, journal) sur un cas dont on connaît la réponse.
+E002 : une recette fixée avant tout modèle, la régression logistique sur log(1 + activité) seule, sans pénalité (C = 10⁶), apprise sur chaque pli. Elle range les établissements comme l'opposé de l'activité, mais donne des probabilités, donc un Brier. Ce n'est pas le modèle : une variable, aucun réglage, aucun choix fait en regardant les résultats.
+Résultats (commit 2cdce06 ; `journal_experiences.csv`, `resultats/04_references/tableaux/references_par_population.csv`, figure `references_par_pli.png`) :
+
+| Expérience | PR-AUC (7 plis / 5 plis) | ROC-AUC (7 / 5) | Brier (7 / 5) |
+|---|---|---|---|
+| E001, hasard | 0,052 / 0,054 | 0,500 / 0,500 | 0,0494 / 0,0508 |
+| E002, règle naïve | 0,133 / 0,131 | 0,752 / 0,750 | 0,0478 / 0,0492 |
+
+La règle naïve bat le hasard sur les 7 plis, pour les trois populations : PR-AUC 0,133 contre 0,052 pour toutes les lignes, 0,113 contre 0,046 pour les décrochages, 0,045 contre 0,006 pour les sorties ; ROC-AUC 0,752, 0,744 et 0,790. Son coefficient sur log(1 + activité) est négatif sur tous les plis (de −1,01 à −0,79) : plus l'établissement est gros, moins il est à risque. **Barre à battre, pli par pli : une PR-AUC d'environ 0,13 et une ROC-AUC d'environ 0,75.** Un modèle qui ne la dépasse pas n'apporte rien de plus que la taille.
 
 ## Définitions en phrases simples
 
