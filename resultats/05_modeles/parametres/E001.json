@@ -1,0 +1,37 @@
+[
+ {
+  "pli": 1,
+  "annee_validee": 2014,
+  "part_y1_entrainement": 0.05500331345261763
+ },
+ {
+  "pli": 2,
+  "annee_validee": 2015,
+  "part_y1_entrainement": 0.05466130114017438
+ },
+ {
+  "pli": 3,
+  "annee_validee": 2016,
+  "part_y1_entrainement": 0.05043909029497861
+ },
+ {
+  "pli": 4,
+  "annee_validee": 2017,
+  "part_y1_entrainement": 0.05089058524173028
+ },
+ {
+  "pli": 5,
+  "annee_validee": 2018,
+  "part_y1_entrainement": 0.05092592592592592
+ },
+ {
+  "pli": 6,
+  "annee_validee": 2021,
+  "part_y1_entrainement": 0.0501024823502619
+ },
+ {
+  "pli": 7,
+  "annee_validee": 2022,
+  "part_y1_entrainement": 0.052011776251226695
+ }
+]
