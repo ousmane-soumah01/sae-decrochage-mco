@@ -23,7 +23,7 @@ CLES_OBLIGATOIRES = {
                 "separateur_csv", "cle", "tables"],
     "activite": ["colonne_journees_complete", "colonne_venues_partielle",
                  "colonne_sejours_0_jour", "poids_partielle", "poids_sejours_0_jour"],
-    "perimetre": ["seuil_petits_etablissements"],
+    "perimetre": ["seuil_petits_etablissements", "capacite_mco_requise"],
     "cible": ["reference", "ecart_points", "sortie_est_un_decrochage", "fermeture_en_cours_est_une_sortie",
               "compensation_min", "reprise", "retirer_restructurations"],
     "decoupage": ["passages_exclus", "annees_test", "annees_min_entrainement"],
@@ -77,6 +77,8 @@ def verifier_config(config):
     # 4. Seuil des petits établissements : strictement positif
     if config["perimetre"]["seuil_petits_etablissements"] <= 0:
         raise ValueError("perimetre.seuil_petits_etablissements doit être strictement positif.")
+    if not isinstance(config["perimetre"]["capacite_mco_requise"], bool):
+        raise ValueError("perimetre.capacite_mco_requise doit valoir true ou false.")
 
     # 5. Référence connue
     if config["cible"]["reference"] not in REFERENCES_CONNUES:

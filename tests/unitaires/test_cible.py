@@ -6,6 +6,7 @@ Passage 2023 -> 2024 (activités en journées-équivalentes, seuil 1 000) :
     référence = 152 540 / 153 200 - 1 = -0,4308 %
 """
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -294,3 +295,29 @@ def test_un_stable_qui_ferme_en_fin_d_annee_reste_stable(config):
 def test_fermeture_desactivee(config):
     config["cible"]["fermeture_en_cours_est_une_sortie"] = False
     assert classe_de_f_en_2023(panel_fermeture(), config)["classe"] == "decrochage"
+
+
+# --- champ : capacité MCO en t ------------------------------------------------------------
+
+def test_sans_capacite_mco_lit_seulement_l_annee_t(config):
+    # F 2024 : 0 lit, 4 000 journées (fermé pendant 2024). Le passage 2024 -> 2025 est sans capacité
+    # en t ; le passage 2023 -> 2024 (50 lits en 2023) ne l'est pas, et garde y = 1.
+    panel = panel_fermeture()
+    panel = pd.concat([panel, pd.DataFrame({"fi": ["H"], "an": [2026], "activite": [100_000.0], "lit_mco": [400.0],
+                                            "pla_mco": [0.0], "fi_ej": ["EH"]})], ignore_index=True)
+    c = classer(construire_passages(panel, config), panel, config).set_index(["fi", "t"])
+    assert c.loc[("F", 2023), "sans_capacite_mco_t"] == 0 and c.loc[("F", 2023), "y"] == 1
+    assert c.loc[("F", 2024), "sans_capacite_mco_t"] == 1
+
+
+def test_sans_capacite_mco_compte_les_cases_vides_comme_0(config):
+    panel = panel_fermeture()
+    panel.loc[(panel.fi == "F") & (panel.an == 2024), "lit_mco"] = np.nan
+    c = classer(construire_passages(panel, config), panel, config).set_index(["fi", "t"])
+    assert c.loc[("F", 2024), "sans_capacite_mco_t"] == 1
+
+
+def test_sans_capacite_mco_faux_sans_colonnes_de_capacite(config):
+    panel = panel_exemple()
+    c = classer(construire_passages(panel, config), panel, config)
+    assert (c["sans_capacite_mco_t"] == 0).all()

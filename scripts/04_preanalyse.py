@@ -56,9 +56,11 @@ Question 6 : comment découper les années pour apprendre, valider et tester ?
     des lits dans la discipline (mécanisme d'absence) ;
   - figure covid_et_test.png.
 
-Les questions 6 à 8 utilisent la cible telle qu'elle était à ces décisions : sans la reprise des
-capacités (cible.reprise, décidée après la question 7) pour les questions 6 et 7, et sans la
-fermeture en cours d'année (cible.fermeture_en_cours_est_une_sortie, décidée après la question 8).
+Les questions 6 à 9 utilisent la cible telle qu'elle était à ces décisions : sans la reprise des
+capacités (cible.reprise, décidée après la question 7) pour les questions 6 et 7, sans la
+fermeture en cours d'année (cible.fermeture_en_cours_est_une_sortie, décidée après la question 8)
+pour les questions 6 à 8, et sans la règle de champ (perimetre.capacite_mco_requise, décidée après
+la question 9) pour les questions 6 à 9.
 
 Question 7 : les sorties et les décrochages restants cachent-ils des mouvements de structure ?
 (passages dont la cible est connue ; « déjà repéré » = restructuration probable de la question 5)
@@ -475,9 +477,11 @@ def main():
 
 
 def sans_regles_posterieures(config, reprise=True, fermeture=True):
-    """Copie de la configuration sans les règles de la cible décidées après une question : la reprise
-    des capacités (après la question 7) et la fermeture en cours d'année (après la question 8)."""
+    """Copie de la configuration sans les règles décidées après une question : la reprise des
+    capacités (après la question 7), la fermeture en cours d'année (après la question 8) et la règle
+    de champ sur les capacités MCO (après la question 9, toujours retirée ici)."""
     copie = copy.deepcopy(config)
+    copie["perimetre"]["capacite_mco_requise"] = False
     if reprise:
         copie["cible"]["reprise"]["active"] = False
     if fermeture:
@@ -842,6 +846,7 @@ def question_8(panel, config, tableaux):
 def question_9(panel, config, tableaux):
     """Question 9 : sites sans lits ni places MCO en t (fermeture déjà faite ou capacité non saisie),
     règle de champ (lits + places MCO > 0 en t, connue en t) et classes de y = 1."""
+    config = sans_regles_posterieures(config, reprise=False, fermeture=False)
     annees = range(config["donnees"]["annee_debut"], config["donnees"]["annee_fin"] + 1)
     identite = empiler_table(config, "ID", annees, chemin_donnees(config, "dossier_extraites"))
     c = restructurations(classer(construire_passages(panel, config), panel, config), panel, identite, config)

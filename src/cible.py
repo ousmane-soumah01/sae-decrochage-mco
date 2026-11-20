@@ -104,6 +104,18 @@ def fermetures_en_cours(passages, panel, config):
                      & (derniere_active == t1) & (t1 < panel["an"].max()), index=passages.index)
 
 
+def sans_capacite_mco(passages, panel):
+    """Vrai si le site ne déclare ni lit ni place MCO en t (cases vides comptées 0).
+
+    Ne lit que l'année t : sert à définir le champ (perimetre.capacite_mco_requise, appliqué par
+    src.decoupage.lignes_evaluees), jamais la cible. Faux si le panel n'a pas les capacités.
+    """
+    if not set(CAPACITES_MCO) <= set(panel.columns):
+        return pd.Series(False, index=passages.index)
+    capacite = dict(zip(zip(panel["fi"], panel["an"]), panel[CAPACITES_MCO].fillna(0).sum(axis=1)))
+    return pd.Series([capacite.get(k, np.nan) == 0 for k in zip(passages["fi"], passages["t"])], index=passages.index)
+
+
 def classer(passages, panel, config):
     """Classe chaque passage : stable, decrochage, sortie ou inconnue ; et calcule y.
 
@@ -112,7 +124,7 @@ def classer(passages, panel, config):
     inconnue : absent en t+1 mais réapparu plus tard (trou de déclaration ou fermeture
                temporaire : on ne connaît pas son activité en t+1) ;
     y = 1 pour un décrochage ou une sortie (cible.sortie_est_un_decrochage), 0 pour
-    stable, vide pour inconnue.
+    stable, vide pour inconnue. sans_capacite_mco_t : aucun lit ni place MCO en t (champ, pas cible).
     """
     p = ecarts_et_decrochages(passages, config)
     annees = panel.groupby("fi")["an"].apply(set).to_dict()
@@ -120,6 +132,7 @@ def classer(passages, panel, config):
                                for fi, t1, actif in zip(p["fi"], p["t1"], p["actif_t1"])]
     p["classe"] = "stable"
     p.loc[p["decrochage"], "classe"] = "decrochage"
+    p["sans_capacite_mco_t"] = sans_capacite_mco(p, panel).astype(int)
     p["fermeture_en_cours"] = fermetures_en_cours(p, panel, config).astype(int)
     p.loc[(p["fermeture_en_cours"] == 1) & (p["classe"] == "decrochage"), "classe"] = "sortie"
     p.loc[~p["actif_t1"], "classe"] = "sortie"

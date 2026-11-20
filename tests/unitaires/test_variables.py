@@ -102,7 +102,8 @@ def test_variables_explicatives_garde_les_categorielles_en_texte_et_sans_fuite()
 
 
 @pytest.mark.parametrize("colonne", ["activite_t1", "restructuration_probable", "changement_de_groupe", "fi_ej",
-                                     "reprise_capacites", "reprise_meme_ej", "fermeture_en_cours"])
+                                     "reprise_capacites", "reprise_meme_ej", "fermeture_en_cours",
+                                     "sans_capacite_mco_t"])
 def test_verifier_sans_fuite_refuse_une_colonne_interdite(colonne):
     assert colonne in VARIABLES_INTERDITES
     with pytest.raises(ValueError, match=colonne):

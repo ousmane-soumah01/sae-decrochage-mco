@@ -38,7 +38,7 @@ CONFIG_MINIMALE = {
         "poids_partielle": 0.5,
         "poids_sejours_0_jour": 0.5,
     },
-    "perimetre": {"seuil_petits_etablissements": 1000},
+    "perimetre": {"seuil_petits_etablissements": 1000, "capacite_mco_requise": True},
     "cible": {"reference": "moyenne_ponderee", "ecart_points": 15, "sortie_est_un_decrochage": True,
               "fermeture_en_cours_est_une_sortie": True,
               "compensation_min": 0.5, "retirer_restructurations": True,
@@ -169,6 +169,11 @@ def test_verifier_config_refuse_une_compensation_hors_de_0_1(config, valeur):
     with pytest.raises(ValueError, match="compensation_min"):
         verifier_config(config)
 
+
+def test_verifier_config_refuse_une_capacite_requise_qui_n_est_pas_vrai_ou_faux(config):
+    config["perimetre"]["capacite_mco_requise"] = 1
+    with pytest.raises(ValueError, match="capacite_mco_requise"):
+        verifier_config(config)
 
 def test_verifier_config_refuse_une_fermeture_qui_n_est_pas_vrai_ou_faux(config):
     config["cible"]["fermeture_en_cours_est_une_sortie"] = "oui"
