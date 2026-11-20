@@ -17,12 +17,9 @@ Produit, dans resultats/03_exploration/ :
   - tableaux/taux_occupation.csv : lignes et y = 1 au-dessus de plusieurs taux d'occupation, et
     part expliquée par des journées exploitables trop basses ;
   - figures/y1_par_quintile_activite.png : part de décrochages et de sorties par quintile d'activité ;
-  - figures/nuages_de_points.png : nuages de points de 6 variables clés, par classe ;
-  - ACP descriptive des variables numériques continues (log des quantités, centrées-réduites ; les
-    indicateurs et les catégorielles ne servent qu'à décrire) : tableaux/acp_variance.csv,
-    tableaux/acp_charges.csv (corrélations des variables avec les 4 premières composantes),
-    tableaux/acp_amas.csv (profil des deux amas du plan 1-2 où se concentrent les y = 1),
-    figures/acp.png. L'ACP n'est pas utilisée par les modèles (sauf en variante, apprise dans chaque pli).
+  - figures/nuages_de_points.png : nuages de points de 6 variables clés, par classe.
+L'ACP normée descriptive est dans scripts/07_acp.Rmd (R Markdown, FactoMineR), rendue dans
+resultats/03_exploration/acp_normee.html.
 """
 
 import sys
@@ -40,13 +37,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
-from sklearn.decomposition import PCA  # noqa: E402
-from sklearn.impute import SimpleImputer  # noqa: E402
 from sklearn.metrics import roc_auc_score  # noqa: E402
-from sklearn.preprocessing import StandardScaler  # noqa: E402
 
 from src.config import charger_config, chemin_donnees, racine_projet  # noqa: E402
-from src.variables import CATEGORIELLES, QUANTITES_MCO  # noqa: E402
+from src.variables import CATEGORIELLES  # noqa: E402
 
 CORRELATIONS = ["pearson", "spearman", "kendall"]
 SEUILS_OCCUPATION = [1.0, 1.2, 1.5, 3.0, 10.0]
@@ -58,14 +52,6 @@ CLASSES = {"stable": ("stables", "#b9b8b2"), "decrochage": ("décrochages", "#2a
 VARIABLES_NUAGES = {"log_activite": "log(1 + activité)", "taux_occupation_mco": "taux d'occupation",
                     "duree_moyenne_sejour_mco": "durée moyenne de séjour", "part_partielle_mco": "part de la partielle",
                     "part_journees_chi": "part des journées de chirurgie", "sites_entite": "log(1 + sites de l'entité)"}
-# ACP : variables numériques continues ; les quantités passent par log(1 + x)
-ACP_EN_LOG = QUANTITES_MCO + ["activite", "sites_entite"]
-ACP_CONTINUES = ACP_EN_LOG + ["taux_occupation_mco", "part_partielle_mco", "duree_moyenne_sejour_mco",
-                              "part_journees_med", "part_journees_chi", "part_journees_obs", "part_site_dans_entite"]
-ACP_PLAFONNEES = ["taux_occupation_mco", "duree_moyenne_sejour_mco"]     # au 99e centile, pour l'ACP seulement
-# Amas du plan 1-2 où se concentrent les y = 1 (lus sur la figure, décrits dans acp_amas.csv)
-AMAS = {"petits établissements de médecine (CP1 < -4, CP2 < 0)": lambda c1, c2: (c1 < -4) & (c2 < 0),
-        "petites cliniques de chirurgie ambulatoire (CP1 < -1, CP2 > 4)": lambda c1, c2: (c1 < -1) & (c2 > 4)}
 
 
 def auc_d_une_variable(x, y):
@@ -202,7 +188,6 @@ def main():
     print("\n   Part de y = 1 par quintile d'activité (%) :", parts.sum(axis=1).round(1).tolist())
 
     nuages_de_points(e, figures)
-    acp_descriptive(e, tableaux, figures)
 
     print(f"\nTableaux écrits dans {tableaux.relative_to(racine_projet())}, figures dans "
           f"{figures.relative_to(racine_projet())}")
@@ -253,79 +238,6 @@ def nuages_de_points(e, figures):
     fig.tight_layout()
     fig.savefig(figures / "nuages_de_points.png", dpi=90)
     plt.close(fig)
-
-
-def acp_descriptive(e, tableaux, figures):
-    """7. ACP descriptive : variance expliquée, charges, plans 1-2 et 3-4, profil des deux amas."""
-    X = e[ACP_CONTINUES].copy()
-    X[ACP_EN_LOG] = np.log1p(X[ACP_EN_LOG])
-    for c in ACP_PLAFONNEES:
-        X[c] = X[c].clip(upper=X[c].quantile(0.99))
-    Z = StandardScaler().fit_transform(SimpleImputer(strategy="median").fit_transform(X))
-    acp = PCA().fit(Z)
-    C = acp.transform(Z)
-    ve = acp.explained_variance_ratio_
-    variance = pd.DataFrame({"composante": range(1, len(ve) + 1), "valeur_propre": acp.explained_variance_,
-                             "variance_expliquee_pct": 100 * ve, "cumul_pct": 100 * np.cumsum(ve)})
-    variance.round(3).to_csv(tableaux / "acp_variance.csv", index=False)
-    charges = pd.DataFrame(acp.components_[:4].T * np.sqrt(acp.explained_variance_[:4]), index=ACP_CONTINUES,
-                           columns=["cp1", "cp2", "cp3", "cp4"])
-    charges.index.name = "variable"
-    charges.round(3).to_csv(tableaux / "acp_charges.csv")
-    print(f"\n7. ACP de {len(ACP_CONTINUES)} variables continues : variance expliquée (%) des 5 premières composantes "
-          f"{np.round(100 * ve[:5], 1).tolist()} ; cumul : 2 composantes {100 * ve[:2].sum():.1f} %, "
-          f"5 : {100 * ve[:5].sum():.1f} %, 90 % atteints avec {int(np.searchsorted(np.cumsum(ve), 0.9) + 1)} ; "
-          f"valeurs propres > 1 : {int((acp.explained_variance_ > 1).sum())}")
-    for cp in ["cp1", "cp2", "cp3"]:
-        tri = charges[cp].sort_values(key=abs, ascending=False).head(5)
-        print(f"   {cp} : " + ", ".join(f"{n} {x:+.2f}" for n, x in tri.items()))
-
-    lignes = []
-    for nom, choisir in {**AMAS, "tout l'entraînement": lambda c1, c2: np.ones(len(c1), dtype=bool)}.items():
-        g = e[choisir(C[:, 0], C[:, 1])]
-        lignes.append({"amas": nom, "lignes": len(g), "y1": int(g["y"].sum()), "y1_pct": 100 * g["y"].mean(),
-                       "activite_mediane": g["activite"].median(),
-                       "duree_sejour_mediane": g["duree_moyenne_sejour_mco"].median(),
-                       "part_partielle_mediane": g["part_partielle_mco"].median(),
-                       "part_chirurgie_mediane": g["part_journees_chi"].median(),
-                       "urgences_pct": 100 * g["a_urgences"].mean(), "smr_pct": 100 * g["a_smr"].mean(),
-                       "catr_principales": ", ".join(f"{k} ({n})" for k, n in g["catr"].value_counts().head(3).items())})
-    amas = pd.DataFrame(lignes)
-    amas.round(2).to_csv(tableaux / "acp_amas.csv", index=False)
-    print("   Amas du plan 1-2 :")
-    print(amas.drop(columns="catr_principales").round(1).to_string(index=False))
-
-    fig, ax = plt.subplots(2, 2, figsize=(13, 11))
-    n = min(15, len(ve))
-    ax[0, 0].bar(range(1, n + 1), 100 * ve[:n], color="#2a78d6", label="par composante")
-    ax[0, 0].plot(range(1, n + 1), 100 * np.cumsum(ve[:n]), color="#eb6834", marker="o", markersize=4, label="cumul")
-    ax[0, 0].set_title("Variance expliquée (%)", fontsize=10)
-    ax[0, 0].set_xlabel("composante", color=GRIS)
-    ax[0, 0].legend(frameon=False, fontsize=8)
-    for x, (p, q) in zip([ax[0, 1], ax[1, 0]], [(0, 1), (2, 3)]):
-        dessiner_par_classe(x, C[:, p], C[:, q], e["classe"])
-        x.set_xlabel(f"CP{p + 1} ({100 * ve[p]:.1f} %)", color=GRIS)
-        x.set_ylabel(f"CP{q + 1} ({100 * ve[q]:.1f} %)", color=GRIS)
-        x.set_title(f"Plan {p + 1}-{q + 1}, par classe", fontsize=10)
-    ax[0, 1].legend(markerscale=4, frameon=False, fontsize=8)
-    x = ax[1, 1]
-    x.add_patch(plt.Circle((0, 0), 1, fill=False, color=GRIS, linewidth=0.8))
-    meilleures = charges.assign(norme=np.hypot(charges["cp1"], charges["cp2"])).nlargest(14, "norme")
-    for nom, r in meilleures.iterrows():
-        x.arrow(0, 0, r["cp1"], r["cp2"], color="#2a78d6", head_width=0.02, linewidth=0.8, length_includes_head=True)
-        x.text(1.07 * r["cp1"], 1.07 * r["cp2"], nom, fontsize=7, color="#2b2a27", ha="center")
-    x.set_xlim(-1.15, 1.15)
-    x.set_ylim(-1.15, 1.15)
-    x.set_aspect("equal")
-    x.set_title("Cercle des corrélations, plan 1-2 (14 variables les mieux représentées)", fontsize=10)
-    for a in ax.flat:
-        habiller(a)
-    fig.suptitle("Entraînement : ACP descriptive des variables numériques continues "
-                 "(log des quantités, centrées-réduites)", fontsize=12)
-    fig.tight_layout()
-    fig.savefig(figures / "acp.png", dpi=90)
-    plt.close(fig)
-
 
 if __name__ == "__main__":
     main()

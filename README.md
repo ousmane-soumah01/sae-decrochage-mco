@@ -78,6 +78,7 @@ python scripts/04_preanalyse.py      # pré-analyse des règles de la cible et d
 python scripts/05_table_modelisation.py  # table de modélisation : une ligne par passage évalué
 python scripts/06_dictionnaire.py    # dictionnaire des colonnes du panel
 python scripts/07_exploration.py     # exploration des variables, sur l'entraînement seulement
+Rscript -e "rmarkdown::render('scripts/07_acp.Rmd', output_dir = 'resultats/03_exploration', output_file = 'acp_normee.html')"  # ACP normée (R)
 python scripts/08_references.py      # références à battre (hasard, règle naïve) dans le journal
 python -m pytest                     # tests unitaires et d'intégration
 ```
