@@ -83,6 +83,16 @@ fermé en cours d'année (décrochage ou sortie) ?
   - fermeture_en_cours_par_partie.csv : décrochages et sorties des lignes évaluées, par partie,
     et ce qu'ils deviendraient si les fermetures définitives en cours d'année étaient des sorties ;
   - fermeture_en_cours_cas.csv : chaque passage concerné.
+
+Question 9 : que faire d'un site sans lits ni places MCO en t (fermeture déjà faite pendant l'année t,
+ou capacité non saisie) ? Règle examinée, connue en t : n'entrent dans l'étude que les sites qui
+déclarent des lits ou des places MCO en t.
+  - champ_lignes_zero_capacite.csv : lignes évaluées à 0 lit et 0 place MCO en t, avec leur capacité
+    l'année d'avant et d'après, et ce qu'elles sont (passage qui suit une fermeture en cours d'année,
+    fermeture pendant l'année t, capacité non saisie) : description, la règle n'utilise pas la suite ;
+  - champ_par_partie.csv : lignes hors champ (sorties, décrochages, stables) et lignes restantes, par partie ;
+  - classes_y1_rapport.csv : y = 1 réparti en décrochage, fermeture et arrêt du MCO (pour le rapport) ;
+  - champ_controle_indicateur.csv : ce qu'annonce inc_lits_zero_avec_journees, toutes lignes et dans le champ.
 """
 
 import copy
@@ -115,6 +125,7 @@ from src.cible import (  # noqa: E402
 )
 from src.config import charger_config, chemin_donnees, racine_projet  # noqa: E402
 from src.decoupage import lignes_evaluees, plis_par_annee, separer_test  # noqa: E402
+from src.nettoyage import vers_nombre  # noqa: E402
 
 COMPOSANTES = ["jou_mco", "sejhc_mco", "sej0_mco", "sejhp_mco", "sea_mco"]
 POIDS_CANDIDATS = {"1/3": 1 / 3, "1/2": 1 / 2, "1": 1.0}
@@ -455,6 +466,9 @@ def main():
 
     # --- Question 8 : fermeture en cours d'année ---------------------------------------
     question_8(panel, config, tableaux)
+
+    # --- Question 9 : sites sans capacité MCO en t (règle de champ) ----------------------
+    question_9(panel, config, tableaux)
 
     print(f"\nTableaux écrits dans {tableaux.relative_to(racine_projet())}, figures dans "
           f"{figures.relative_to(racine_projet())}")
@@ -823,6 +837,99 @@ def question_8(panel, config, tableaux):
                 "activite_t1_pct_de_t", "capacite_t", "derniere_annee_active", "devenir"]
     cas[colonnes].sort_values(["devenir", "classe", "t", "fi"]).to_csv(tableaux / "fermeture_en_cours_cas.csv",
                                                                        index=False)
+
+
+def question_9(panel, config, tableaux):
+    """Question 9 : sites sans lits ni places MCO en t (fermeture déjà faite ou capacité non saisie),
+    règle de champ (lits + places MCO > 0 en t, connue en t) et classes de y = 1."""
+    annees = range(config["donnees"]["annee_debut"], config["donnees"]["annee_fin"] + 1)
+    identite = empiler_table(config, "ID", annees, chemin_donnees(config, "dossier_extraites"))
+    c = restructurations(classer(construire_passages(panel, config), panel, config), panel, identite, config)
+    ev = lignes_evaluees(c, config).reset_index(drop=True)
+    decoupage = config["decoupage"]
+    ev["partie"] = np.where(ev["t"].isin(decoupage["passages_exclus"]), "covid",
+                            np.where(ev["t"].isin(decoupage["annees_test"]), "test", "entrainement"))
+    capacite = dict(zip(zip(panel["fi"], panel["an"]), panel["lit_mco"].fillna(0) + panel["pla_mco"].fillna(0)))
+    derniere_active = panel[panel["activite"] > 0].groupby("fi")["an"].max()
+    ev["capacite_t"] = [capacite.get((f, t), np.nan) for f, t in zip(ev["fi"], ev["t"])]
+    ev["capacite_t_moins_1"] = [capacite.get((f, t - 1), np.nan) for f, t in zip(ev["fi"], ev["t"])]
+    ev["capacite_t_plus_1"] = [capacite.get((f, t + 1), np.nan) for f, t in zip(ev["fi"], ev["t"])]
+    ev["derniere_annee_mco"] = ev["fi"].map(derniere_active)
+    ev["deja_ferme_en_t"] = (ev["capacite_t"] == 0) & (ev["derniere_annee_mco"] == ev["t"])   # description seulement
+    ev["hors_champ"] = ev["capacite_t"] == 0                                                   # règle : connue en t
+    # passage d'avant (toutes les lignes de la cible, restructurations comprises) : fermeture en cours d'année ?
+    fermetures = set(zip(c.loc[c["fermeture_en_cours"] == 1, "fi"], c.loc[c["fermeture_en_cours"] == 1, "t"] + 1))
+    ev["suit_une_fermeture_en_cours"] = [(f, t) in fermetures for f, t in zip(ev["fi"], ev["t"])]
+
+    # 24. Lignes évaluées à 0 lit et 0 place MCO en t
+    zero = ev[ev["capacite_t"] == 0].copy()
+    zero["capacite_avant_et_apres"] = (zero["capacite_t_moins_1"] > 0) & (zero["capacite_t_plus_1"] > 0)
+    zero["explication"] = np.select(
+        [zero["suit_une_fermeture_en_cours"], zero["deja_ferme_en_t"] & (zero["t"] == min(annees)),
+         zero["deja_ferme_en_t"], zero["capacite_avant_et_apres"]],
+        ["passage qui suit une fermeture en cours d'année", "fermeture pendant la première année (pas de passage avant)",
+         "fermeture pendant l'année t", "capacité non saisie (lits avant et après)"], "autre")
+    colonnes = ["fi", "t", "partie", "classe", "y", "activite_t", "capacite_t_moins_1", "capacite_t_plus_1",
+                "derniere_annee_mco", "deja_ferme_en_t", "explication"]
+    zero[colonnes].sort_values(["explication", "t", "fi"]).to_csv(tableaux / "champ_lignes_zero_capacite.csv", index=False)
+    print(f"\n24. Lignes évaluées à 0 lit et 0 place MCO en t : {len(zero)}")
+    print(pd.crosstab(zero["explication"], zero["classe"], margins=True, margins_name="total").to_string())
+
+    # 25. Règle de champ : lignes sans lits ni places MCO en t retirées, par partie
+    lignes = []
+    for partie in ["entrainement", "test", "covid"]:
+        p = ev[ev["partie"] == partie]
+        hors = p[p["hors_champ"]]
+        apres = p[~p["hors_champ"]]
+        lignes.append({"partie": partie, "lignes": len(p), "y1": int(p["y"].sum()),
+                       "hors_champ": len(hors), "hors_champ_sorties": int((hors["classe"] == "sortie").sum()),
+                       "hors_champ_decrochages": int((hors["classe"] == "decrochage").sum()),
+                       "hors_champ_stables": int((hors["classe"] == "stable").sum()),
+                       "lignes_apres": len(apres), "y1_apres": int(apres["y"].sum()),
+                       "part_y1_apres_pct": round(100 * apres["y"].mean(), 2),
+                       "decrochages_apres": int((apres["classe"] == "decrochage").sum()),
+                       "sorties_apres": int((apres["classe"] == "sortie").sum())})
+    par_partie = pd.DataFrame(lignes).set_index("partie")
+    par_partie.to_csv(tableaux / "champ_par_partie.csv")
+    print("\n25. Règle de champ (lits + places MCO > 0 en t) : lignes hors champ et lignes évaluées restantes :")
+    print(par_partie.to_string())
+
+    # 26. Classes de y = 1, pour le rapport : décrochage, fermeture, arrêt du MCO
+    smr = empiler_table(config, "SSR_SMR", annees, chemin_donnees(config, "dossier_extraites"))
+    smr = smr[smr["gde"] == "SSR_TOT"]
+    jours = vers_nombre(smr["jouhc"]).fillna(0) + vers_nombre(smr["jouhp"]).fillna(0)
+    avec_smr = set(zip(smr.loc[jours > 0, "fi"], smr.loc[jours > 0, "an"].astype(int)))
+    dans_sae = set(zip(identite["fi"], identite["an"].astype(int)))
+    garde = ev[~ev["hors_champ"] & (ev["y"] == 1)].copy()
+    fin = config["donnees"]["annee_fin"]
+    apres_mco = [range(int(m) + 1, fin + 1) for m in garde["derniere_annee_mco"]]
+    garde["classe_rapport"] = np.select(
+        [garde["classe"] == "decrochage",
+         [any((f, a) in avec_smr for a in r) for f, r in zip(garde["fi"], apres_mco)],
+         [any((f, a) in dans_sae for a in r) for f, r in zip(garde["fi"], apres_mco)]],
+        ["décrochage", "arrêt du MCO (activité SMR ensuite)", "fermeture ou arrêt du MCO (dans la SAE, sans SMR)"],
+        "fermeture (absent de la SAE)")
+    classes = pd.crosstab(garde["classe_rapport"], garde["partie"], margins=True, margins_name="total")
+    classes.to_csv(tableaux / "classes_y1_rapport.csv")
+    print("\n26. Classes de y = 1 pour le rapport (lignes évaluées dans le champ) :")
+    print(classes.to_string())
+
+    # 27. Contrôle : ce qu'annonce inc_lits_zero_avec_journees à l'entraînement, avant et après le retrait
+    indicateur = panel.set_index(["fi", "an"])["inc_lits_zero_avec_journees"]
+    ev["inc_lits_zero_avec_journees"] = [indicateur.get((f, t), 0) for f, t in zip(ev["fi"], ev["t"])]
+    lignes = []
+    for nom, p in [("toutes les lignes évaluées", ev), ("dans le champ", ev[~ev["hors_champ"]])]:
+        p = p[p["partie"] == "entrainement"]
+        un = p[p["inc_lits_zero_avec_journees"] == 1]
+        lignes.append({"lignes": nom, "indicateur_a_1": len(un), "stables": int((un["classe"] == "stable").sum()),
+                       "decrochages": int((un["classe"] == "decrochage").sum()),
+                       "sorties": int((un["classe"] == "sortie").sum()),
+                       "y1_pct_si_1": round(100 * un["y"].mean(), 1) if len(un) else np.nan,
+                       "y1_pct_si_0": round(100 * p.loc[p["inc_lits_zero_avec_journees"] != 1, "y"].mean(), 1)})
+    controle = pd.DataFrame(lignes).set_index("lignes")
+    controle.to_csv(tableaux / "champ_controle_indicateur.csv")
+    print("\n27. Contrôle à l'entraînement : inc_lits_zero_avec_journees, toutes lignes et dans le champ :")
+    print(controle.to_string())
 
 
 if __name__ == "__main__":
