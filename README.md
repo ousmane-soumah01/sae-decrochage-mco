@@ -77,6 +77,9 @@ python scripts/03_panel.py           # panel : une ligne par établissement et p
 python scripts/04_preanalyse.py      # pré-analyse des règles de la cible et du découpage
 python scripts/05_table_modelisation.py  # table de modélisation : une ligne par passage évalué
 python scripts/06_dictionnaire.py    # dictionnaire des colonnes du panel
+python scripts/07_exploration.py     # exploration des variables, sur l'entraînement seulement
+Rscript -e "rmarkdown::render('scripts/07_acp.Rmd', output_dir = 'resultats/03_exploration', output_file = 'acp_normee.html')"  # ACP normée (R)
+python scripts/08_references.py      # références à battre (hasard, règle naïve) dans le journal
 python -m pytest                     # tests unitaires et d'intégration
 ```
 
@@ -92,6 +95,8 @@ flowchart LR
     D --> E["04 · Pré-analyse<br/>cible et découpage"]
     D --> F["06 · Dictionnaire<br/>des colonnes"]
     E --> G["05 · Table de modélisation<br/>passages évalués × variables en t"]
+    G --> H["07 · Exploration<br/>entraînement seulement"]
+    G --> I["08 · Références<br/>journal des expériences"]
 ```
 
 ## Organisation du dépôt
@@ -124,7 +129,9 @@ sae-decrochage-mco/
 - [x] Règles de la cible, avec leur pré-analyse
 - [x] Dictionnaire des colonnes du panel
 - [x] Découpage dans le temps et règles d'évaluation
-- [ ] Table de modélisation, modèles, évaluation
+- [x] Table de modélisation, exploration et variables
+- [x] Journal des expériences et références à battre (hasard, règle naïve)
+- [ ] Modèles et évaluation
 - [ ] Application et rapport
 
 ## Licence

@@ -6,12 +6,14 @@ Passage 2023 -> 2024 (activités en journées-équivalentes, seuil 1 000) :
     référence = 152 540 / 153 200 - 1 = -0,4308 %
 """
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from src.cible import (
     citations_fusion_scission,
     classer,
+    reprises_de_capacites,
     construire_passages,
     ecarts_et_decrochages,
     reference_ponderee,
@@ -173,3 +175,149 @@ def test_changement_de_groupe(config):
     panel = pd.DataFrame({"fi": ["Z", "Z"], "an": [2023, 2024], "fi_ej": ["E1", "E2"],
                           "activite": [5_000.0, 5_000.0]})
     assert avec_restructurations(panel, config).loc["Z", "changement_de_groupe"] == 1
+
+
+# --- reprise des capacités par un autre site --------------------------------------------
+
+def panel_reprise(lignes_en_plus=()):
+    """A (entité EA, département 01) : 100 lits en 2023, absent en 2024. N (entité EN, 01), nouveau en
+    2024 : 98 lits, 9 000 journées. H : grand site stable qui fixe la référence à 0."""
+    lignes = [("A", 2023, "EA", "01", 10_000.0, 100.0), ("N", 2024, "EN", "01", 9_000.0, 98.0),
+              ("H", 2023, "EH", "02", 100_000.0, 400.0), ("H", 2024, "EH", "02", 100_000.0, 400.0),
+              *lignes_en_plus]
+    p = pd.DataFrame(lignes, columns=["fi", "an", "fi_ej", "dep", "activite", "lit_mco"])
+    p["pla_mco"] = 0.0
+    return p
+
+
+def test_reprise_par_un_nouveau_site_d_une_autre_entite(config):
+    # 100 lits perdus, 98 repris (à 10 % près), même département, 9 000 journées sur 10 000 reprises.
+    c = avec_restructurations(panel_reprise(), config)
+    assert c.loc["A", "classe"] == "sortie"
+    assert c.loc["A", "compensation"] == 0 or pd.isna(c.loc["A", "compensation"])   # A seul dans son entité
+    assert c.loc["A", "reprise_capacites"] == 1 and c.loc["A", "reprise_meme_ej"] == 0
+    assert c.loc["A", "restructuration_probable"] == 1
+
+
+def test_reprise_dans_la_meme_entite(config):
+    p = panel_reprise()
+    p.loc[p.fi == "N", "fi_ej"] = "EA"
+    assert avec_restructurations(p, config).loc["A", "reprise_meme_ej"] == 1
+
+
+@pytest.mark.parametrize("modifier, raison", [
+    (lambda p: p.assign(dep=p.dep.where(p.fi != "N", "03")), "autre département"),
+    (lambda p: p.assign(lit_mco=p.lit_mco.where(p.fi != "N", 70.0)), "gain trop différent de la perte"),
+    (lambda p: p.assign(activite=p.activite.where(p.fi != "N", 4_000.0)), "activité pas reprise"),
+    (lambda p: p.assign(lit_mco=p.lit_mco.where(p.fi != "A", 25.0)).assign(
+        lit_mco=lambda q: q.lit_mco.where(q.fi != "N", 25.0)), "perte sous 30 lits et places"),
+])
+def test_pas_de_reprise(config, modifier, raison):
+    c = avec_restructurations(modifier(panel_reprise()), config)
+    assert c.loc["A", "reprise_capacites"] == 0, raison
+    assert c.loc["A", "restructuration_probable"] == 0, raison
+
+
+def test_pas_de_reprise_quand_l_ancien_site_garde_des_lits(config):
+    # A passe de 100 à 40 lits (et de 10 000 à 3 000 journées) ; N gagne 60 lits : A est toujours là, il décroche.
+    p = panel_reprise([("A", 2024, "EA", "01", 3_000.0, 40.0)])
+    p.loc[p.fi == "N", "lit_mco"] = 60.0
+    c = avec_restructurations(p, config)
+    assert c.loc["A", "classe"] == "decrochage"
+    assert c.loc["A", "reprise_capacites"] == 0 and c.loc["A", "restructuration_probable"] == 0
+
+
+def test_pas_de_reprise_quand_trop_de_candidats(config):
+    # 7 sites gagnent aussi 100 lits ailleurs en France : 8 candidats > 6, la correspondance peut être le hasard.
+    autres = [(f"Z{i}", 2024, f"EZ{i}", "50", 9_000.0, 100.0) for i in range(7)]
+    assert avec_restructurations(panel_reprise(autres), config).loc["A", "reprise_capacites"] == 0
+
+
+def test_reprise_desactivee_ou_sans_capacites(config):
+    config["cible"]["reprise"]["active"] = False
+    assert avec_restructurations(panel_reprise(), config).loc["A", "reprise_capacites"] == 0
+    config["cible"]["reprise"]["active"] = True
+    sans_lits = panel_reprise().drop(columns=["lit_mco", "pla_mco"])
+    classes = classer(construire_passages(sans_lits, config), sans_lits, config)
+    assert reprises_de_capacites(classes, sans_lits, config).empty
+
+
+# --- fermeture en cours d'année ---------------------------------------------------------
+
+def panel_fermeture(activite_2024=4_000.0, lits_2024=0.0, actif_2025=False):
+    """F : 50 lits et 10 000 journées en 2023 ; en 2024, activite_2024 et lits_2024 ; en 2025, actif
+    ou absent. H : grand site stable de 2023 à 2025, qui fixe la référence à 0."""
+    lignes = [("F", 2023, 10_000.0, 50.0), ("F", 2024, activite_2024, lits_2024),
+              ("H", 2023, 100_000.0, 400.0), ("H", 2024, 100_000.0, 400.0), ("H", 2025, 100_000.0, 400.0)]
+    if actif_2025:
+        lignes.append(("F", 2025, 3_000.0, 10.0))
+    p = pd.DataFrame(lignes, columns=["fi", "an", "activite", "lit_mco"])
+    p["pla_mco"], p["fi_ej"] = 0.0, "E" + p["fi"]
+    return p
+
+
+def classe_de_f_en_2023(panel, config):
+    c = classer(construire_passages(panel, config), panel, config)
+    return c[(c.fi == "F") & (c.t == 2023)].iloc[0]
+
+
+def test_fermeture_en_cours_d_annee_devient_une_sortie(config):
+    # 10 000 -> 4 000 journées, 0 lit au 31/12/2024, plus rien en 2025 : sortie, y = 1.
+    f = classe_de_f_en_2023(panel_fermeture(), config)
+    assert f["decrochage"] and f["fermeture_en_cours"] == 1
+    assert f["classe"] == "sortie" and f["y"] == 1
+
+
+def test_pas_de_fermeture_si_le_site_est_encore_actif_ensuite(config):
+    f = classe_de_f_en_2023(panel_fermeture(actif_2025=True), config)
+    assert f["fermeture_en_cours"] == 0 and f["classe"] == "decrochage"
+
+
+def test_pas_de_fermeture_si_le_site_garde_des_lits(config):
+    f = classe_de_f_en_2023(panel_fermeture(lits_2024=12.0), config)
+    assert f["fermeture_en_cours"] == 0 and f["classe"] == "decrochage"
+
+
+def test_pas_de_fermeture_quand_t1_est_la_derniere_annee(config):
+    # Sans 2025 dans le panel, on ne sait pas si F reprend : il reste un décrochage.
+    panel = panel_fermeture()
+    panel = panel[panel.an < 2025]
+    f = classe_de_f_en_2023(panel, config)
+    assert f["fermeture_en_cours"] == 0 and f["classe"] == "decrochage"
+
+
+def test_un_stable_qui_ferme_en_fin_d_annee_reste_stable(config):
+    # Activité presque inchangée en 2024, puis fermeture : pas de baisse en 2023 -> 2024, y = 0.
+    f = classe_de_f_en_2023(panel_fermeture(activite_2024=9_800.0), config)
+    assert f["fermeture_en_cours"] == 1 and f["classe"] == "stable" and f["y"] == 0
+
+
+def test_fermeture_desactivee(config):
+    config["cible"]["fermeture_en_cours_est_une_sortie"] = False
+    assert classe_de_f_en_2023(panel_fermeture(), config)["classe"] == "decrochage"
+
+
+# --- champ : capacité MCO en t ------------------------------------------------------------
+
+def test_sans_capacite_mco_lit_seulement_l_annee_t(config):
+    # F 2024 : 0 lit, 4 000 journées (fermé pendant 2024). Le passage 2024 -> 2025 est sans capacité
+    # en t ; le passage 2023 -> 2024 (50 lits en 2023) ne l'est pas, et garde y = 1.
+    panel = panel_fermeture()
+    panel = pd.concat([panel, pd.DataFrame({"fi": ["H"], "an": [2026], "activite": [100_000.0], "lit_mco": [400.0],
+                                            "pla_mco": [0.0], "fi_ej": ["EH"]})], ignore_index=True)
+    c = classer(construire_passages(panel, config), panel, config).set_index(["fi", "t"])
+    assert c.loc[("F", 2023), "sans_capacite_mco_t"] == 0 and c.loc[("F", 2023), "y"] == 1
+    assert c.loc[("F", 2024), "sans_capacite_mco_t"] == 1
+
+
+def test_sans_capacite_mco_compte_les_cases_vides_comme_0(config):
+    panel = panel_fermeture()
+    panel.loc[(panel.fi == "F") & (panel.an == 2024), "lit_mco"] = np.nan
+    c = classer(construire_passages(panel, config), panel, config).set_index(["fi", "t"])
+    assert c.loc[("F", 2024), "sans_capacite_mco_t"] == 1
+
+
+def test_sans_capacite_mco_faux_sans_colonnes_de_capacite(config):
+    panel = panel_exemple()
+    c = classer(construire_passages(panel, config), panel, config)
+    assert (c["sans_capacite_mco_t"] == 0).all()

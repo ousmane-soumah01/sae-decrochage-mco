@@ -1,0 +1,4 @@
+partie,lignes,y1,hors_champ,hors_champ_sorties,hors_champ_decrochages,hors_champ_stables,lignes_apres,y1_apres,part_y1_apres_pct,decrochages_apres,sorties_apres
+entrainement,11619,636,32,24,5,3,11587,607,5.24,542,65
+test,2802,149,6,4,2,0,2796,143,5.11,126,17
+covid,2836,262,9,9,0,0,2827,253,8.95,234,19

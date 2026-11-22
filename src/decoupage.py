@@ -9,10 +9,13 @@ import numpy as np
 
 def lignes_evaluees(classes, config):
     """Passages dont la cible est connue (y = 0 ou 1), sans les restructurations probables
-    si cible.retirer_restructurations est vrai."""
+    si cible.retirer_restructurations est vrai, et sans les sites qui ne déclarent ni lit ni
+    place MCO en t si perimetre.capacite_mco_requise est vrai (règle connue en t)."""
     garde = classes["y"].notna()
     if config["cible"]["retirer_restructurations"]:
         garde &= classes["restructuration_probable"] == 0
+    if config["perimetre"]["capacite_mco_requise"] and "sans_capacite_mco_t" in classes:
+        garde &= classes["sans_capacite_mco_t"] == 0
     return classes[garde]
 
 

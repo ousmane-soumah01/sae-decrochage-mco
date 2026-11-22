@@ -1,0 +1,21 @@
+seuil,perimetre,groupe,fortes_pertes,reprises,reprises_pct,placebo_pct
+20,entrainement,decrochage déjà repéré,43,6,13.95,0.0
+20,entrainement,decrochage gardé,60,4,6.67,0.0
+20,entrainement,sortie déjà repéré,45,7,15.56,13.16
+20,entrainement,sortie gardé,26,6,23.08,0.0
+20,entrainement,stable (y=0),54,1,1.85,0.0
+20,toutes,decrochage déjà repéré,51,6,11.76,0.0
+20,toutes,decrochage gardé,90,5,5.56,1.19
+20,toutes,sortie déjà repéré,53,9,16.98,13.04
+20,toutes,sortie gardé,47,9,19.15,0.0
+20,toutes,stable (y=0),83,1,1.2,0.0
+30,entrainement,decrochage déjà repéré,37,5,13.51,0.0
+30,entrainement,decrochage gardé,42,4,9.52,0.0
+30,entrainement,sortie déjà repéré,38,7,18.42,15.15
+30,entrainement,sortie gardé,23,6,26.09,0.0
+30,entrainement,stable (y=0),34,1,2.94,0.0
+30,toutes,decrochage déjà repéré,44,5,11.36,0.0
+30,toutes,decrochage gardé,65,5,7.69,1.64
+30,toutes,sortie déjà repéré,46,9,19.57,14.63
+30,toutes,sortie gardé,42,9,21.43,0.0
+30,toutes,stable (y=0),53,1,1.89,0.0

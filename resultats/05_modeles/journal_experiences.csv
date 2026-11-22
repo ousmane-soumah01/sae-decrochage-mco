@@ -1,0 +1,3 @@
+id,date,commit,code_modifie_non_commite,empreinte_table,modele,reglages,preparation,graine,pr_auc_7_plis,pr_auc_5_plis,roc_auc_7_plis,roc_auc_5_plis,brier_7_plis,brier_5_plis,commentaire
+E001,2026-11-20 23:18,2cdce06,False,c70074d0db8951603526bc9c92d4b50d,hasard,{},aucune,42,0.0521,0.0537,0.5,0.5,0.0494,0.0508,niveau du hasard : probabilité constante égale à la part de y = 1 de l'entraînement du pli
+E002,2026-11-20 23:18,2cdce06,False,c70074d0db8951603526bc9c92d4b50d,regle_naive,"{""C"": 1000000.0}",log(1 + activite),42,0.1328,0.1314,0.752,0.7497,0.0478,0.0492,"règle naïve, recette fixée avant tout modèle : logistique sur log(1 + activité) seule"

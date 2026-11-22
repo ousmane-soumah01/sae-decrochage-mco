@@ -1,0 +1,44 @@
+[
+ {
+  "pli": 1,
+  "annee_validee": 2014,
+  "ordonnee": 6.434920947810901,
+  "coef_log1p_activite": -1.0069250911912837
+ },
+ {
+  "pli": 2,
+  "annee_validee": 2015,
+  "ordonnee": 5.578177375343976,
+  "coef_log1p_activite": -0.9082662312481067
+ },
+ {
+  "pli": 3,
+  "annee_validee": 2016,
+  "ordonnee": 5.065787438995437,
+  "coef_log1p_activite": -0.8593208776914827
+ },
+ {
+  "pli": 4,
+  "annee_validee": 2017,
+  "ordonnee": 4.881465879483471,
+  "coef_log1p_activite": -0.8375636398631779
+ },
+ {
+  "pli": 5,
+  "annee_validee": 2018,
+  "ordonnee": 4.6597809640975365,
+  "coef_log1p_activite": -0.813365131177154
+ },
+ {
+  "pli": 6,
+  "annee_validee": 2021,
+  "ordonnee": 4.635127231420426,
+  "coef_log1p_activite": -0.8131402171456409
+ },
+ {
+  "pli": 7,
+  "annee_validee": 2022,
+  "ordonnee": 4.50444253550686,
+  "coef_log1p_activite": -0.7948335083789128
+ }
+]

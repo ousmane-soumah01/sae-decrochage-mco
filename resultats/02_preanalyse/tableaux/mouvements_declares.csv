@@ -1,0 +1,11 @@
+perimetre,groupe,lignes,entite_changee_declaree,modification_entite,fusion,scission,creation,se_cite_lui_meme,cite_par_un_autre,entite_citee,entite_precedente_d_un_site_en_t1,modification_dans_l_entite,entite_changee_observee,au_moins_un
+entrainement,decrochage déjà repéré,122,1.64,22.13,18.85,3.28,2.46,13.11,18.85,3.28,4.92,33.61,4.92,39.34
+entrainement,decrochage gardé,585,1.88,5.64,2.74,0.68,1.2,1.37,0.0,1.37,1.71,6.15,3.08,8.89
+entrainement,sortie déjà repéré,90,0.0,20.0,15.56,2.22,3.33,11.11,27.78,1.11,1.11,35.56,0.0,43.33
+entrainement,sortie gardé,59,1.69,11.86,6.78,1.69,0.0,3.39,0.0,0.0,5.08,13.56,0.0,16.95
+entrainement,stable (y=0),10983,0.88,3.65,2.71,0.22,0.56,0.92,1.06,1.37,1.0,5.19,1.1,6.68
+toutes,decrochage déjà repéré,183,3.28,19.13,14.75,2.73,3.83,10.93,17.49,2.19,5.46,27.32,3.83,33.33
+toutes,decrochage gardé,960,1.15,4.58,2.29,0.73,0.83,1.15,0.0,1.25,1.35,5.0,2.08,7.19
+toutes,sortie déjà repéré,114,0.0,21.05,15.79,2.63,4.39,12.28,28.07,2.63,0.88,35.09,0.0,43.86
+toutes,sortie gardé,99,2.02,13.13,8.08,2.02,1.01,4.04,0.0,0.0,5.05,14.14,0.0,19.19
+toutes,stable (y=0),16210,0.8,3.28,2.49,0.23,0.49,0.8,1.02,1.34,0.93,4.63,0.98,6.09
